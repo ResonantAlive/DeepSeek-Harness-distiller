@@ -20,6 +20,7 @@ import { runTask } from '@deepseek-ai/dsh-distill'
 import type { AgentRunner } from '@deepseek-ai/dsh-distill'
 import { collectEnvironmentSecrets } from '@deepseek-ai/dsh-distill-redaction'
 import { bootDistillComposition, pinnedTeacher } from './composition.ts'
+import type {} from '@deepseek-ai/dsh-tools'
 import { createAgentRunner } from './agent-runner.ts'
 
 /** Parsed command line. */
@@ -143,7 +144,11 @@ export interface RunReport {
 export async function runAll(
   args: RunnerArgs,
   agent: AgentRunner,
-  options: { secrets?: readonly string[] } = {},
+  options: {
+    secrets?: readonly string[]
+    /** What the composition offered this run, recorded on every attempt. */
+    environment?: { available_tools?: readonly string[]; sandbox_mode?: string }
+  } = {},
 ): Promise<RunReport[]> {
   const loaded = await loadTasks(args.manifest)
   const templates = args.templates ?? join(loaded.root, '..', 'templates')
@@ -173,6 +178,7 @@ export async function runAll(
       dataset,
       agent,
       ...options.secrets === undefined ? {} : { secrets: options.secrets },
+      ...options.environment === undefined ? {} : { environment: options.environment },
     }))
     // A refusal the attempt loop recorded as an infrastructure failure is how a
     // rate limit reaches this layer, so the gate learns the wait from the text
@@ -230,12 +236,15 @@ export async function main(
   }
   const composition = await bootDistillComposition()
   try {
+    // The registry is the only place that knows which tools the composition
+    // actually holds, so the attempt records what ran rather than what was asked.
+    const environment = { available_tools: composition.ctx.tools.schemas().map(schema => schema.name) }
     const agent = createAgentRunner(composition.ctx, {
       ...pinnedTeacher(composition.ctx),
       capture: composition.capture,
       ...args.attemptTimeoutMs === undefined ? {} : { attemptTimeoutMs: args.attemptTimeoutMs },
     })
-    return report(await runAll(args, agent, { secrets }))
+    return report(await runAll(args, agent, { secrets, environment }))
   } finally {
     await composition.shutdown()
   }

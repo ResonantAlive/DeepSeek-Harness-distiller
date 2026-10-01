@@ -13,7 +13,8 @@
     "@deepseek-ai/dsh-distill-resource": "workspace:*",
     "@deepseek-ai/dsh-distill-teacher-lock": "workspace:*",
     "@deepseek-ai/dsh-distill-trajectory-events": "workspace:*",
-    "@deepseek-ai/dsh-llm": "workspace:*"
+    "@deepseek-ai/dsh-llm": "workspace:*",
+    "@deepseek-ai/dsh-tools": "workspace:*"
   },
   "devDependencies": {
     "@deepseek-ai/dsh-agent-default-model": "workspace:*",
@@ -23,6 +24,7 @@
     "@deepseek-ai/dsh-distill-resource": "workspace:*",
     "@deepseek-ai/dsh-distill-teacher-lock": "workspace:*",
     "@deepseek-ai/dsh-distill-trajectory-events": "workspace:*",
-    "@deepseek-ai/dsh-llm": "workspace:*"
+    "@deepseek-ai/dsh-llm": "workspace:*",
+    "@deepseek-ai/dsh-tools": "workspace:*"
   }
 }

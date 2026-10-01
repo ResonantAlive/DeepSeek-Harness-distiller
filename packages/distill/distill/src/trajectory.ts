@@ -105,6 +105,12 @@ export interface AttemptTrajectory {
     readonly reasoning_effort: string | null
     readonly max_tokens: number | null
     /**
+     * The sampling temperature the requests ran under, when the composition
+     * stated one. A dataset consumer reproducing a trajectory needs it, and a
+     * null says the composition left it to the provider rather than naming zero.
+     */
+    readonly temperature: number | null
+    /**
      * The model the provider reported serving the request, when it named one.
      *
      * `model` is what the request asked for; this is what answered. They differ
@@ -115,6 +121,25 @@ export interface AttemptTrajectory {
   }
   /** The attempt's final status. */
   readonly status: Status
+  /**
+   * What the attempt ran with: the declared tool spec, the tools the composition
+   * actually registered, and the sandbox mode.
+   *
+   * `null` on a field means the attempt's record does not state it, which is a
+   * different fact from an empty list.
+   */
+  readonly environment: {
+    readonly tools: unknown
+    readonly available_tools: readonly string[] | null
+    readonly sandbox_mode: string | null
+  }
+  /**
+   * The last failure the attempt recorded, in the form the recorder kept it.
+   *
+   * `null` when the attempt recorded no error event, so a reader can tell an
+   * attempt that failed quietly from one that never failed at all.
+   */
+  readonly last_error: unknown
   /** When the attempt started, as recorded by its first event. */
   readonly started_at: string
   /** When the attempt ended, as recorded by its last event. */
@@ -231,6 +256,9 @@ export function buildTrajectory(
   let reasoningEffort: string | null = null
   let maxTokens: number | null = null
   let servedModel: string | null = null
+  let temperature: number | null = null
+  let lastError: unknown = null
+  let environment: AttemptTrajectory['environment'] = { tools: null, available_tools: null, sandbox_mode: null }
   let final = ''
   let headerReasoningEffort: string | undefined
 
@@ -311,13 +339,39 @@ export function buildTrajectory(
       if (content.length > 0) final = content
       continue
     }
+    if (event.event_type === 'error') {
+      // The latest failure is the one that ended the attempt, so each error
+      // replaces the last rather than accumulating.
+      lastError = payload
+      continue
+    }
+    if (event.event_type === 'task_start' && payload.environment !== undefined) {
+      const seen = payload.environment as {
+        tools?: unknown
+        available_tools?: readonly string[] | null
+        sandbox_mode?: string | null
+      }
+      environment = {
+        tools: seen.tools ?? null,
+        available_tools: seen.available_tools ?? null,
+        sandbox_mode: seen.sandbox_mode ?? null,
+      }
+      continue
+    }
     if (event.event_type === 'task_start' && payload.phase === 'request-header') {
-      const config = payload.config as { provider?: string; model?: string; reasoningEffort?: string; maxTokens?: number } | undefined
+      const config = payload.config as {
+        provider?: string
+        model?: string
+        reasoningEffort?: string
+        temperature?: number
+        maxTokens?: number
+      } | undefined
       if (config !== undefined) {
         provider = config.provider ?? provider
         model = config.model ?? model
         reasoningEffort = config.reasoningEffort ?? reasoningEffort
         maxTokens = config.maxTokens ?? maxTokens
+        temperature = config.temperature ?? temperature
         headerReasoningEffort = config.reasoningEffort
       }
       continue
@@ -336,7 +390,9 @@ export function buildTrajectory(
   const finishedAt = last?.timestamp ?? startedAt
   return {
     attempt_id: options.attemptId,
-    teacher: { provider, model, reasoning_effort: reasoningEffort, max_tokens: maxTokens, served_model: servedModel },
+    teacher: { provider, model, reasoning_effort: reasoningEffort, max_tokens: maxTokens, served_model: servedModel, temperature },
+    last_error: lastError,
+    environment,
     status: options.status,
     started_at: startedAt,
     finished_at: finishedAt,

@@ -12,6 +12,7 @@
     { "path": "../../packages/boot/app-boot" },
     { "path": "../../packages/core/agent-default-model" },
     { "path": "../../packages/llm/llm" },
+    { "path": "../../packages/core/tools" },
     { "path": "../../packages/distill/distill" },
     { "path": "../../packages/distill/redaction" },
     { "path": "../../packages/distill/resource" },

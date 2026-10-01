@@ -51,6 +51,20 @@ export interface AttemptContext {
    * or a step budget; the runner records whatever the turn produced either way.
    */
   readonly limits: AttemptLimits
+  /**
+   * What the composition actually offered the attempt.
+   *
+   * The runner knows the task's declared tool spec, but only the composition
+   * knows which tools its registry ended up holding. A caller that can enumerate
+   * them states them here so the trajectory records what ran rather than what
+   * was asked for.
+   */
+  readonly environment?: {
+    /** Tool names the composition registered for this attempt. */
+    readonly available_tools?: readonly string[]
+    /** The sandbox mode the attempt ran under, when the composition pinned one. */
+    readonly sandbox_mode?: string
+  }
 }
 
 /** The bounds one attempt runs under. */
@@ -103,6 +117,18 @@ export interface RunTaskOptions {
   readonly agent: AgentRunner
   /** Literal secrets to redact from every recorded event. */
   readonly secrets?: readonly string[]
+  /**
+   * What the composition offered every attempt of this run.
+   *
+   * Only the caller can enumerate the tools its registry ended up holding, so
+   * the runner records what it is told here rather than inferring it.
+   */
+  readonly environment?: {
+    /** Tool names the composition registered. */
+    readonly available_tools?: readonly string[]
+    /** The sandbox mode the run is confined to. */
+    readonly sandbox_mode?: string
+  }
   /**
    * The teacher model every attempt must run under. When set, an attempt whose
    * recorded model differs is flagged `model_mismatch` and never enters the
@@ -345,6 +371,7 @@ export async function runTask(options: RunTaskOptions): Promise<TaskResult> {
         ...lastFailure === undefined ? {} : { lastFailure },
       }),
       limits: attemptLimits(task, defaults),
+      ...options.environment === undefined ? {} : { environment: options.environment },
     }
     await recorder.append('task_start', {
       task_id: task.task_id,
@@ -353,6 +380,11 @@ export async function runTask(options: RunTaskOptions): Promise<TaskResult> {
       workspace,
       evaluator_kind: task.evaluator.kind,
       tools: task.tools ?? defaults.tools ?? null,
+      environment: {
+        tools: task.tools ?? defaults.tools ?? null,
+        available_tools: context.environment?.available_tools ?? null,
+        sandbox_mode: context.environment?.sandbox_mode ?? null,
+      },
     })
 
     let outcome: AttemptOutcome

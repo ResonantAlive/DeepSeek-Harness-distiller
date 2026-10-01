@@ -289,7 +289,7 @@ describe('buildTrajectory details', () => {
       fileCapture: { git: false, coverage: 'file-tools-only' },
     })
     expect(trajectory.trajectory[0]?.decision.reasoning_effort).toBe('max')
-    expect(trajectory.teacher).toEqual({ provider: 'p', model: 'm', reasoning_effort: 'max', max_tokens: 9, served_model: null })
+    expect(trajectory.teacher).toEqual({ provider: 'p', model: 'm', reasoning_effort: 'max', max_tokens: 9, served_model: null, temperature: null })
   })
 
   it('ignores bookkeeping assistant messages and unknown phases', () => {
@@ -356,7 +356,7 @@ describe('buildTrajectory details', () => {
       fileCapture: { git: false, coverage: 'file-tools-only' },
     })
     expect(trajectory.trajectory).toEqual([])
-    expect(trajectory.teacher).toEqual({ provider: 'unknown', model: 'unknown', reasoning_effort: null, max_tokens: null, served_model: null })
+    expect(trajectory.teacher).toEqual({ provider: 'unknown', model: 'unknown', reasoning_effort: null, max_tokens: null, served_model: null, temperature: null })
     expect(trajectory.duration_ms).toBe(0)
   })
 })
@@ -428,6 +428,33 @@ describe('attempt budgets', () => {
     payload,
   })
 
+  it('surfaces the sampling temperature and the last failure', () => {
+    const trajectory = buildTrajectory([
+      event('task_start', { phase: 'request-header', config: { provider: 'p', model: 'm', temperature: 0.2 } }),
+      event('error', { phase: 'agent', message: 'first' }),
+      event('error', { phase: 'agent', message: 'last' }),
+    ], options)
+    expect(trajectory.teacher.temperature).toBe(0.2)
+    // The latest failure is the one that ended the attempt.
+    expect(trajectory.last_error).toEqual({ phase: 'agent', message: 'last' })
+  })
+
+  it('reports the environment the attempt ran with, and null where it states none', () => {
+    const stated = buildTrajectory([
+      event('task_start', {
+        environment: { tools: { allow: ['read'] }, available_tools: ['read', 'write'], sandbox_mode: 'workspace-write' },
+      }),
+    ], options)
+    expect(stated.environment).toEqual({
+      tools: { allow: ['read'] },
+      available_tools: ['read', 'write'],
+      sandbox_mode: 'workspace-write',
+    })
+    // An attempt that recorded nothing about its environment says so.
+    expect(buildTrajectory([], options).environment)
+      .toEqual({ tools: null, available_tools: null, sandbox_mode: null })
+    expect(buildTrajectory([], options).last_error).toBeNull()
+  })
   it('measures how long a tool ran, not how long the turn did', () => {
     const trajectory = buildTrajectory([
       event('assistant_message', { step: 0, decision: { text: 'run', reasoning: null, reasoning_available: false, tool_calls: [] } }),
