@@ -160,6 +160,82 @@ export function attemptLimits(task: TaskDefinition, defaults: TaskDefaults): Att
 }
 
 /**
+ * Sum the tokens the adapter reported for one attempt.
+ * @param events - the attempt's raw events.
+ * @returns the total of every usage payload the attempt recorded.
+ */
+export function totalTokens(events: readonly RawEvent[]): number {
+  let total = 0
+  for (const event of events) {
+    if (event.event_type !== 'assistant_message') continue
+    const usage = event.payload.usage
+    if (usage === null || typeof usage !== 'object') continue
+    const counts = usage as { inputTokens?: number; outputTokens?: number }
+    total += (counts.inputTokens ?? 0) + (counts.outputTokens ?? 0)
+  }
+  return total
+}
+
+/**
+ * Find one action the attempt repeated without making progress.
+ * @param trajectory - the assembled attempt.
+ * @param limit - how many identical consecutive calls count as stuck.
+ * @returns the reason, or `undefined` when no run reached the limit.
+ */
+export function repeatedAction(trajectory: AttemptTrajectory, limit: number): string | undefined {
+  let previous: string | undefined
+  let run = 0
+  for (const step of trajectory.trajectory) {
+    const signature = step.actions.map(action => `${action.tool}(${action.arguments})`).join('|')
+    if (signature.length === 0) {
+      previous = undefined
+      run = 0
+      continue
+    }
+    run = signature === previous ? run + 1 : 1
+    previous = signature
+    if (run >= limit) {
+      return `repeated the same tool call ${String(run)} times without progress`
+    }
+  }
+  return undefined
+}
+
+/**
+ * Report the budget an attempt's own record shows it exceeded.
+ *
+ * The bounds are checked against what the attempt recorded rather than what the
+ * model claimed, so a turn that overran its steps, its tokens, or repeated one
+ * action is rejected as over budget instead of being judged on its result.
+ *
+ * @param trajectory - the assembled attempt.
+ * @param events - the attempt's raw events, which carry the adapter's usage.
+ * @param limits - the attempt's budgets.
+ * @returns the first breach, or `undefined` when the attempt stayed inside them.
+ */
+export function budgetBreach(
+  trajectory: AttemptTrajectory,
+  events: readonly RawEvent[],
+  limits: AttemptLimits,
+): string | undefined {
+  const steps = trajectory.trajectory.length
+  if (limits.max_steps_per_attempt !== undefined && steps > limits.max_steps_per_attempt) {
+    return `took ${String(steps)} steps, over its budget of ${String(limits.max_steps_per_attempt)}`
+  }
+  if (limits.max_tokens_per_attempt !== undefined) {
+    const tokens = totalTokens(events)
+    if (tokens > limits.max_tokens_per_attempt) {
+      return `spent ${String(tokens)} tokens, over its budget of ${String(limits.max_tokens_per_attempt)}`
+    }
+  }
+  if (limits.repeat_action_limit !== undefined) {
+    const repeated = repeatedAction(trajectory, limits.repeat_action_limit)
+    if (repeated !== undefined) return repeated
+  }
+  return undefined
+}
+
+/**
  * Compose the prompt for one attempt.
  * @param task - the task.
  * @param options - whether failure feedback is requested and what the last failure was.
@@ -345,10 +421,15 @@ export async function runTask(options: RunTaskOptions): Promise<TaskResult> {
     }
     await recorder.flush()
 
-    const attemptStatus: Status = evaluation?.status ?? outcome.status
+    // A budget the attempt exceeded outranks its evaluator: however the work
+    // turned out, this is not the run the corpus asked the teacher to produce.
+    const breach = budgetBreach(inspected, events, context.limits)
+    const attemptStatus: Status = breach !== undefined
+      ? 'FAILED'
+      : evaluation?.status ?? outcome.status
     await recorder.append('attempt_end', {
       status: attemptStatus,
-      reason: evaluation?.reason ?? outcome.reason,
+      reason: breach ?? evaluation?.reason ?? outcome.reason,
       integrity_flags: flags,
     })
     await recorder.flush()

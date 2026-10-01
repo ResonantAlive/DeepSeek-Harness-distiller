@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { DatasetWriter } from '../src/dataset.ts'
-import { discardAttempt, promptFor, runTask } from '../src/runner.ts'
+import { discardAttempt, attemptLimits, budgetBreach, promptFor, repeatedAction, runTask, totalTokens } from '../src/runner.ts'
 import type { AgentRunner, AttemptContext } from '../src/runner.ts'
 import { buildTrajectory, textOf } from '../src/trajectory.ts'
 import { parseRunnerArgs } from '../../../../apps/distill/src/bin.ts'
@@ -397,5 +397,108 @@ describe('promptFor with context', () => {
     const definition = { prompt: 'P', initial_context: 'C' } as TaskDefinition
     expect(promptFor(definition, { carryFailureFeedback: true, lastFailure: 'L' }))
       .toBe('P\n\nC\n\nA previous attempt failed: L')
+  })
+})
+
+describe('attempt budgets', () => {
+  const options = {
+    attemptId: 'attempt_001',
+    status: 'SUCCESS' as const,
+    integrityFlags: [],
+    evaluation: null,
+    fileCapture: { git: false, coverage: 'file-tools-only' as const },
+  }
+  const step = (text: string, tool = 'read', args = '{"path":"a"}'): { event_type: string; payload: Record<string, unknown> }[] => [
+    {
+      event_type: 'assistant_message',
+      payload: { step: 0, decision: { text, reasoning: null, reasoning_available: false, tool_calls: [{ tool_call_id: 'c1', tool, arguments: args }] } },
+    },
+    // Actions come from the committed call, not from the decision that announced it.
+    { event_type: 'tool_call', payload: { step: 0, tool_call_id: 'c1', tool, arguments: args } },
+  ]
+  const event = (event_type: string, payload: Record<string, unknown>): RawEvent => ({
+    event_id: `id-${event_type}-${Math.random()}`,
+    seq: 0,
+    task_id: 'T',
+    attempt_id: 'attempt_001',
+    batch_id: 'batch_0',
+    event_type,
+    timestamp: '2026-01-01T00:00:00.000Z',
+    monotonic_ms: 0,
+    payload,
+  })
+
+  it('lets the task override the manifest defaults', () => {
+    const defaults = { max_steps_per_attempt: 5, attempt_timeout_ms: 1000 }
+    expect(attemptLimits({ max_steps_per_attempt: 2 } as TaskDefinition, defaults))
+      .toEqual({ max_steps_per_attempt: 2, attempt_timeout_ms: 1000 })
+    expect(attemptLimits({} as TaskDefinition, defaults))
+      .toEqual({ max_steps_per_attempt: 5, attempt_timeout_ms: 1000 })
+  })
+
+  it('sums the usage the adapter reported', () => {
+    expect(totalTokens([
+      event('assistant_message', { phase: 'usage', usage: { inputTokens: 10, outputTokens: 4 } }),
+      event('assistant_message', { phase: 'usage', usage: { inputTokens: 1, outputTokens: 2 } }),
+      event('turn/start', { turn: 1 }),
+      event('assistant_message', { phase: 'usage', usage: null }),
+    ])).toBe(17)
+  })
+
+  it('reports a step budget the attempt overran', () => {
+    const trajectory = buildTrajectory(
+      [step('one'), step('two'), step('three')].flat().map(entry => event(entry.event_type, entry.payload)),
+      options,
+    )
+    expect(budgetBreach(trajectory, [], { max_steps_per_attempt: 3 })).toBeUndefined()
+    expect(budgetBreach(trajectory, [], { max_steps_per_attempt: 2 })).toContain('took 3 steps')
+  })
+
+  it('reports a token budget the attempt overran', () => {
+    const events = [event('assistant_message', { phase: 'usage', usage: { inputTokens: 700, outputTokens: 400 } })]
+    expect(budgetBreach(buildTrajectory([], options), events, { max_tokens_per_attempt: 1100 })).toBeUndefined()
+    expect(budgetBreach(buildTrajectory([], options), events, { max_tokens_per_attempt: 1000 }))
+      .toContain('spent 1100 tokens')
+  })
+
+  it('reports an action the attempt repeated without progress', () => {
+    const trajectory = buildTrajectory(
+      [step('one'), step('two'), step('three')].flat().map(entry => event(entry.event_type, entry.payload)),
+      options,
+    )
+    expect(repeatedAction(trajectory, 4)).toBeUndefined()
+    expect(repeatedAction(trajectory, 3)).toContain('repeated the same tool call 3 times')
+    // A different call breaks the run, so a varied attempt is not stuck.
+    const varied = buildTrajectory([
+      step('one'),
+      step('two', 'write', '{"path":"b"}'),
+      step('three'),
+    ].flat().map(entry => event(entry.event_type, entry.payload)), options)
+    expect(repeatedAction(varied, 2)).toBeUndefined()
+  })
+
+  it('refuses to call an over-budget attempt a success', async () => {
+    const root = await scratch()
+    const dataset = new DatasetWriter({ root: join(root, 'dataset') })
+    const result = await runTask({
+      task: task(),
+      // The evaluator would pass; the budget is what rejects the run.
+      defaults: { max_attempts: 1, max_steps_per_attempt: 0 },
+      templatesRoot: await templatesAt(root),
+      evaluatorRoot: join(root, 'evaluator'),
+      runsRoot: join(root, 'runs'),
+      dataset,
+      agent: teacher(async (context) => {
+        await context.recorder.append('assistant_message', {
+          step: 0,
+          decision: { text: 'working', reasoning: null, reasoning_available: false, tool_calls: [] },
+        })
+        await succeed(context)
+        return { status: 'SUCCESS', reason: 'done' }
+      }),
+    })
+    expect(result.status).toBe('ABANDONED')
+    expect(result.attempts[0]?.status).toBe('FAILED')
+    expect(result.datasetDir).toBe('abandoned/T-X')
   })
 })
