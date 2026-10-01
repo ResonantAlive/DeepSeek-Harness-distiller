@@ -427,8 +427,9 @@ describe('createTaskAdmissionGate', () => {
   })
 
   it('removes a claim that is present', () => {
-    const claims = [{ batchIndex: 0, memoryMb: 512 }, { batchIndex: 1, memoryMb: 256 }]
-    removeClaim(claims, claims[0])
+    const first = { batchIndex: 0, memoryMb: 512 }
+    const claims = [first, { batchIndex: 1, memoryMb: 256 }]
+    removeClaim(claims, first)
     expect(claims).toEqual([{ batchIndex: 1, memoryMb: 256 }])
   })
 

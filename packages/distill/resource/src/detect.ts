@@ -59,7 +59,7 @@ export type FileRead = (path: string) => string | undefined
  * @param read - where file contents come from.
  * @returns the CPU allowance, and the file it came from.
  */
-function probeCpu(read: FileRead): { cpu?: number; file: string } {
+function probeCpu(read: FileRead): { cpu?: number; file?: string } {
   const v2 = parseNumber(read('/sys/fs/cgroup/cpu.max')?.split(/\s+/)[0])
   if (v2 !== undefined && Number.isFinite(v2)) {
     if (v2 === 0) return { cpu: 0, file: '/sys/fs/cgroup/cpu.max' }
@@ -80,7 +80,7 @@ function probeCpu(read: FileRead): { cpu?: number; file: string } {
  * @param read - where file contents come from.
  * @returns the memory allowance, and the file it came from.
  */
-function probeMemory(read: FileRead): { memoryMb?: number; file: string } {
+function probeMemory(read: FileRead): { memoryMb?: number; file?: string } {
   for (const path of ['/sys/fs/cgroup/memory.max', '/sys/fs/cgroup/memory/memory.limit_in_bytes']) {
     const raw = read(path)
     const value = parseNumber(raw)
@@ -99,8 +99,8 @@ export function probeCgroup(read: FileRead = realRead): CgroupProbe {
   const cpu = probeCpu(read)
   const memory = probeMemory(read)
   const files: string[] = []
-  if (cpu.cpu !== undefined) files.push(cpu.file)
-  if (memory.memoryMb !== undefined) files.push(memory.file)
+  if (cpu.cpu !== undefined && cpu.file !== undefined) files.push(cpu.file)
+  if (memory.memoryMb !== undefined && memory.file !== undefined) files.push(memory.file)
   return {
     ...cpu.cpu === undefined ? {} : { cpu: cpu.cpu },
     ...memory.memoryMb === undefined ? {} : { memoryMb: memory.memoryMb },

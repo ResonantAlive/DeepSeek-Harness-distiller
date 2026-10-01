@@ -106,10 +106,15 @@ export async function* translate(events: AsyncIterable<Record<string, unknown>>,
   const usage: TokenUsage = { inputTokens: 0, outputTokens: 0 }
   let started = false
   let reason: FinishReason | undefined
+  // The response names the model that served it; the request only names the one
+  // that was asked for, and an alias or a routed deployment can differ.
+  let servedModel: string | undefined
   for await (const event of events) {
     if (event.type === 'message_start') {
       if (started) return malformed('duplicate message_start')
-      updateUsage(usage, object(event.message).usage)
+      const message = object(event.message)
+      updateUsage(usage, message.usage)
+      if (typeof message.model === 'string' && message.model.length > 0) servedModel = message.model
       started = true
       continue
     }
@@ -157,7 +162,11 @@ export async function* translate(events: AsyncIterable<Record<string, unknown>>,
         }
       }
       usage.totalTokens = usage.inputTokens + usage.outputTokens + (usage.cacheReadTokens ?? 0) + (usage.cacheWriteTokens ?? 0)
-      yield { type: 'usage', usage }
+      yield {
+        type: 'usage',
+        usage,
+        ...servedModel === undefined ? {} : { servedModel },
+      }
       yield { type: 'finish', reason, replayState: replayState(model, [...blocks.values()].map(block => block.replay)) }
       return
     }

@@ -265,9 +265,11 @@ export async function runTask(options: RunTaskOptions): Promise<TaskResult> {
       evaluation: null,
       fileCapture: { git: false, coverage: 'file-tools-only' },
     })
-    // The teacher's identity is verified against what the attempt recorded, not
-    // against what the composition intended.
-    if (options.expectedTeacherModel !== undefined && inspected.teacher.model !== options.expectedTeacherModel) {
+    // The teacher's identity is verified against what the attempt recorded. The
+    // provider's own answer outranks the request, because a request can name an
+    // alias while a different deployment actually answered.
+    const attributed = inspected.teacher.served_model ?? inspected.teacher.model
+    if (options.expectedTeacherModel !== undefined && attributed !== options.expectedTeacherModel) {
       flags.push('model_mismatch')
       allFlags.add('model_mismatch')
     }

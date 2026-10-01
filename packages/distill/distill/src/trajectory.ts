@@ -97,6 +97,14 @@ export interface AttemptTrajectory {
     readonly model: string
     readonly reasoning_effort: string | null
     readonly max_tokens: number | null
+    /**
+     * The model the provider reported serving the request, when it named one.
+     *
+     * `model` is what the request asked for; this is what answered. They differ
+     * behind an alias or a routed deployment, so an integrity check that must
+     * attribute the trajectory to one teacher reads this.
+     */
+    readonly served_model: string | null
   }
   /** The attempt's final status. */
   readonly status: Status
@@ -213,6 +221,7 @@ export function buildTrajectory(
   let model = 'unknown'
   let reasoningEffort: string | null = null
   let maxTokens: number | null = null
+  let servedModel: string | null = null
   let final = ''
   let headerReasoningEffort: string | undefined
 
@@ -296,6 +305,12 @@ export function buildTrajectory(
         maxTokens = config.maxTokens ?? maxTokens
         headerReasoningEffort = config.reasoningEffort
       }
+      continue
+    }
+    if (event.event_type === 'task_start' && payload.phase === 'response-header') {
+      // The provider's own answer to "which model served this" outranks the
+      // request, which can name an alias rather than the deployment behind it.
+      if (typeof payload.model === 'string' && payload.model.length > 0) servedModel = payload.model
     }
   }
   flush()
@@ -306,7 +321,7 @@ export function buildTrajectory(
   const finishedAt = last?.timestamp ?? startedAt
   return {
     attempt_id: options.attemptId,
-    teacher: { provider, model, reasoning_effort: reasoningEffort, max_tokens: maxTokens },
+    teacher: { provider, model, reasoning_effort: reasoningEffort, max_tokens: maxTokens, served_model: servedModel },
     status: options.status,
     started_at: startedAt,
     finished_at: finishedAt,

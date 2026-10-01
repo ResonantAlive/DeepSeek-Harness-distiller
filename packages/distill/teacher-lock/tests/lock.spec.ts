@@ -12,7 +12,8 @@ import {
 } from '../src/lock.ts'
 import type { TeacherModelCandidate } from '../src/lock.ts'
 
-const env = (model: string, envName = TEACHER_MODEL_ENV[0]): TeacherModelCandidate =>
+const DEFAULT_ENV_NAME: string = TEACHER_MODEL_ENV[0] ?? 'DSH_DISTILL_MODEL'
+const env = (model: string, envName: string = DEFAULT_ENV_NAME): TeacherModelCandidate =>
   ({ model, source: 'env', envName })
 const config = (model: string): TeacherModelCandidate => ({ model, source: 'config' })
 

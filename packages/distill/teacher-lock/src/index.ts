@@ -26,6 +26,15 @@ import type { TeacherLock, TeacherModelCandidate } from './lock.ts'
 /** Stable Cordis plugin name used by loader diagnostics. */
 export const name = 'distill-teacher-lock'
 
+/**
+ * The services this plugin must see before it judges the composition.
+ *
+ * The default-model service is the composition's own statement of which model it
+ * will request, so the lock waits for it rather than racing it; judging before
+ * that row mounts would read an empty model list and refuse every composition.
+ */
+export const inject = ['agentDefaultModel']
+
 /** Plugin configuration. */
 export interface Config {
   /**

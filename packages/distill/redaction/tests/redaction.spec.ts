@@ -224,8 +224,7 @@ describe('redactValue', () => {
 
   it('redacts a user-supplied secret echoed through a JSON line', () => {
     const redactor = createRedactor({ secrets: [KEYRING_SECRET] })
-    const line = JSON.stringify({ type: 'tool_result', stdout: `DEEPSEEK_API_KEY=${KEYRING_SECRET}` })
-    const result = redactor.redactValue(JSON.parse(line) as Record<string, unknown>)
+    const result = redactor.redactValue({ type: 'tool_result', stdout: `DEEPSEEK_API_KEY=${KEYRING_SECRET}` })
     expect(JSON.stringify(result.value)).not.toContain(KEYRING_SECRET)
     expect(result.value).toEqual({ type: 'tool_result', stdout: 'DEEPSEEK_API_KEY=[REDACTED:SECRET]' })
   })

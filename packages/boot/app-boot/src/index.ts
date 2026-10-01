@@ -751,6 +751,9 @@ const requiredStartupEntryIds = new Set<string>([
   'headless-runner',
   'acp',
   'sdk-jsonrpc-server',
+  // A composition that mounts the teacher lock must not start when the lock
+  // refuses it, or a run would record trajectories attributed to the wrong model.
+  'distill-teacher-lock',
 ])
 
 /** Render plugin stacks, nested causes, and aggregate member failures once per error. */

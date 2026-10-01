@@ -278,6 +278,12 @@ export class TrajectoryRecorder {
     }
     if (chunk.type === 'text-delta' && chunk.text.length > 0) {
       void this.append('reasoning_delta', { index: chunk.index, text: chunk.text, stream: 'text' })
+      return
+    }
+    if (chunk.type === 'usage' && chunk.servedModel !== undefined) {
+      // Which model answered is a durable fact about the attempt, so it is
+      // recorded rather than discarded with the rest of the usage frame.
+      void this.append('task_start', { phase: 'response-header', model: chunk.servedModel })
     }
   }
 }

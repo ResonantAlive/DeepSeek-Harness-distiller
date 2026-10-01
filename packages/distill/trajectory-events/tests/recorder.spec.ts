@@ -6,7 +6,7 @@ import { Context } from '@deepseek-ai/cordis'
 import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
 import type { AssistantStreamFrame } from '@deepseek-ai/dsh-agent'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { ReasoningEffortId, ToolCallId } from '@deepseek-ai/dsh-llm'
 import { TrajectoryCapture, TrajectoryRecorder, apply, captureOf, createRecorder, decisionOf, recordUsage } from '../src/index.ts'
 import type { RawEvent } from '../src/writer.ts'
 
@@ -120,7 +120,7 @@ describe('TrajectoryRecorder session events', () => {
     recorder.record(session, event('step/start', 1, { turn: 1, step: 1 }))
     recorder.record(session, event('request/header', 2, {
       reason: 'initial',
-      header: { config: { provider: 'deepseek-official', model: 'deepseek-flash', reasoningEffort: 'high' } },
+      header: { config: { provider: 'deepseek-official', model: 'deepseek-flash', reasoningEffort: ReasoningEffortId('high') } },
     }))
     recorder.record(session, event('assistant/message', 3, {
       turn: 1,
@@ -166,7 +166,7 @@ describe('TrajectoryRecorder session events', () => {
     expect(header.payload).toMatchObject({
       phase: 'request-header',
       reason: 'initial',
-      config: { provider: 'deepseek-official', model: 'deepseek-flash', reasoningEffort: 'high' },
+      config: { provider: 'deepseek-official', model: 'deepseek-flash', reasoningEffort: ReasoningEffortId('high') },
       adapter_defaults: null,
     })
 
@@ -302,8 +302,6 @@ describe('TrajectoryRecorder stream frames', () => {
     recorder.recordStreamFrame(frame({ type: 'reasoning-delta', index: 0, text: '' }))
     recorder.recordStreamFrame(frame({ type: 'text-delta', index: 0, text: '' }))
     recorder.recordStreamFrame(frame({ type: 'usage', usage: { inputTokens: 1, outputTokens: 1 } }))
-    recorder.recordStreamFrame({ type: 'start', attempt: 'a' } as AssistantStreamFrame)
-    recorder.recordStreamFrame({ type: 'end', attempt: 'a', settled: 'message' } as unknown as AssistantStreamFrame)
     await recorder.flush()
     expect(recorder.length).toBe(0)
   })

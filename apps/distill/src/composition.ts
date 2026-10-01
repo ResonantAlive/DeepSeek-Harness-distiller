@@ -28,6 +28,7 @@ import {
 import type { ProfileContext, ProfileLayer } from '@deepseek-ai/dsh-app-boot'
 import { apply as applyCapture, captureOf } from '@deepseek-ai/dsh-distill-trajectory-events'
 import type { TrajectoryCapture } from '@deepseek-ai/dsh-distill-trajectory-events'
+import type { ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/dsh-agent-default-model'
 
 /** The launcher identity these rows are composed under. */
@@ -54,7 +55,7 @@ export interface PinnedTeacher {
   /** The model id every attempt must run under. */
   readonly model: string
   /** The reasoning effort the composition pinned, when it pinned one. */
-  readonly reasoningEffort?: 'low' | 'high' | 'max'
+  readonly reasoningEffort?: ReasoningEffortId
 }
 
 /**

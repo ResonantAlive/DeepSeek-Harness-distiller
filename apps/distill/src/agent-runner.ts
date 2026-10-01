@@ -15,7 +15,10 @@
  * @module @deepseek-ai/dsh-distill-app/agent-runner
  */
 
+import { randomUUID } from 'node:crypto'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
+import type { ReasoningEffortId } from '@deepseek-ai/dsh-llm'
+import { SessionId } from '@deepseek-ai/dsh-session'
 import type { Context } from '@deepseek-ai/cordis'
 import type { TrajectoryCapture } from '@deepseek-ai/dsh-distill-trajectory-events'
 import type { AttemptContext, AttemptOutcome, AgentRunner } from '@deepseek-ai/dsh-distill'
@@ -27,7 +30,7 @@ export interface AgentRunnerOptions {
   /** The model id the teacher lock requires. */
   readonly model: string
   /** The reasoning effort to request, when the provider takes one. */
-  readonly reasoningEffort?: 'low' | 'high' | 'max'
+  readonly reasoningEffort?: ReasoningEffortId
   /** The response token ceiling for one request. */
   readonly maxTokens?: number
   /** Milliseconds one attempt may run before it is abandoned. */
@@ -81,6 +84,8 @@ export function createAgentRunner(ctx: Context, options: AgentRunnerOptions): Ag
       const release = options.capture.bind(context.recorder)
       try {
         const { agent } = await ctx.agents.create({
+          // One session per attempt, so the captured log holds exactly this attempt.
+          sessionId: SessionId(randomUUID()),
           meta: { cwd: context.workspace },
           agentOptions: {
             provider: options.provider,

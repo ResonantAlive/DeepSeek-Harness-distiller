@@ -289,7 +289,7 @@ describe('buildTrajectory details', () => {
       fileCapture: { git: false, coverage: 'file-tools-only' },
     })
     expect(trajectory.trajectory[0]?.decision.reasoning_effort).toBe('max')
-    expect(trajectory.teacher).toEqual({ provider: 'p', model: 'm', reasoning_effort: 'max', max_tokens: 9 })
+    expect(trajectory.teacher).toEqual({ provider: 'p', model: 'm', reasoning_effort: 'max', max_tokens: 9, served_model: null })
   })
 
   it('ignores bookkeeping assistant messages and unknown phases', () => {
@@ -356,7 +356,7 @@ describe('buildTrajectory details', () => {
       fileCapture: { git: false, coverage: 'file-tools-only' },
     })
     expect(trajectory.trajectory).toEqual([])
-    expect(trajectory.teacher).toEqual({ provider: 'unknown', model: 'unknown', reasoning_effort: null, max_tokens: null })
+    expect(trajectory.teacher).toEqual({ provider: 'unknown', model: 'unknown', reasoning_effort: null, max_tokens: null, served_model: null })
     expect(trajectory.duration_ms).toBe(0)
   })
 })

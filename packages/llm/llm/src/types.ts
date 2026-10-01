@@ -455,7 +455,19 @@ export type StreamChunk =
   | { type: 'reasoning-delta'; index: number; text: string }
   | { type: 'tool-call-delta'; index: number; id: ToolCallId; name?: string; argumentsDelta: string }
   | { type: 'block-end'; index: number; block: ContentBlock }
-  | { type: 'usage'; usage: TokenUsage }
+  | {
+    type: 'usage'
+    usage: TokenUsage
+    /**
+     * The model the provider reported serving this response, when it named one.
+     *
+     * A request asks for a model; the response says which one actually served it,
+     * and the two can differ behind an alias or a routed deployment. Consumers
+     * that must attribute an output to one model read this rather than the
+     * request.
+     */
+    servedModel?: string
+  }
   | {
     type: 'finish'
     reason: FinishReason
