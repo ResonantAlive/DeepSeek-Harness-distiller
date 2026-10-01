@@ -1,6 +1,6 @@
 ---
 description: "Secret redaction for distillation artifacts: one pass over a string or a JSON value with a literal keyring and pattern rules, so no recorded stdout, trajectory, or archived session log reaches disk unredacted."
-kind: "package-library"
+kind: "package-reference"
 ---
 
 # @deepseek-ai/dsh-distill-redaction
