@@ -5,6 +5,8 @@ kind: "package-reference"
 
 # @deepseek-ai/dsh-distill-redaction
 
+English | [中文](README.zh.md)
+
 ## Summary
 
 Use `dsh-distill-redaction` to remove secrets from anything a distillation run is about to persist. A redactor hides the caller's own values (the *keyring*) and the well-known credential shapes — PEM private keys, `Bearer` and `Authorization` values, `sk-` keys, and `api_key` assignments — replacing each hit with a typed placeholder such as `[REDACTED:API_KEY]`. `redactValue` redacts every string nested in a JSON value, the form trajectories and archived logs take before disk.

@@ -5,6 +5,8 @@ kind: "package-reference"
 
 # @deepseek-ai/dsh-distill
 
+English | [中文](README.zh.md)
+
 ## Summary
 
 Use `dsh-distill` to turn a corpus of tasks into a labelled agent dataset: it loads task definitions, prepares a fresh workspace per attempt, runs the attempt through a caller-supplied agent, records the trajectory while it works, judges the result with commands the task declares, and writes the outcome under a status directory with a shared index.

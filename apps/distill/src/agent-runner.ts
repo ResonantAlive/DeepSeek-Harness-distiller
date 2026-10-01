@@ -33,7 +33,7 @@ export interface AgentRunnerOptions {
   readonly reasoningEffort?: ReasoningEffortId
   /** The response token ceiling for one request. */
   readonly maxTokens?: number
-  /** Milliseconds one attempt may run before it is abandoned. */
+  /** Milliseconds one attempt may run, when the task states no budget of its own. */
   readonly attemptTimeoutMs?: number
   /** The composed capture that receives this attempt's live events. */
   readonly capture: TrajectoryCapture
@@ -98,7 +98,9 @@ export function createAgentRunner(ctx: Context, options: AgentRunnerOptions): Ag
           content: [{ type: 'text', text: context.prompt }],
           source: { kind: 'user' },
         }))
-        await withDeadline(agent.whenIdle(), options.attemptTimeoutMs)
+        // The task's own budget wins; the option is the caller's fallback for a
+        // corpus that states none.
+        await withDeadline(agent.whenIdle(), context.limits.attempt_timeout_ms ?? options.attemptTimeoutMs)
         await ctx.sessions.flush(agent.session)
         return { status: 'SUCCESS', reason: 'the agent finished its turn' }
       } catch (error) {

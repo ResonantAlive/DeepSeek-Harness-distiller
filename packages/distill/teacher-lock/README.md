@@ -5,6 +5,8 @@ kind: "package-reference"
 
 # @deepseek-ai/dsh-distill-teacher-lock
 
+English | [中文](README.zh.md)
+
 ## Summary
 
 Every trajectory a distillation run produces must come from one teacher model, and a composition that cannot be pinned to one must fail before it records anything. `dsh-distill-teacher-lock` resolves that model when the composition loads and refuses the run when it cannot: no candidate at all, two layers naming different models, or a model outside the allowlist. It also refuses an allowlist that accepts any model, because a lock that accepts everything is not a lock.

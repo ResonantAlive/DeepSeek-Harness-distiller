@@ -249,7 +249,27 @@ export function parseTask(file: string, document: unknown): TaskDefinition {
     ...toolsOf(file, source) === undefined ? {} : { tools: toolsOf(file, source) as NonNullable<TaskDefinition['tools']> },
     ...optionalStrings(file, source, 'tags') === undefined ? {} : { tags: optionalStrings(file, source, 'tags') as string[] },
     ...carry === undefined ? {} : { carry_failure_feedback: carry },
+    ...limitField(file, source, 'attempt_timeout_ms'),
+    ...limitField(file, source, 'max_steps_per_attempt'),
+    ...limitField(file, source, 'max_tokens_per_attempt'),
+    ...limitField(file, source, 'repeat_action_limit'),
   }
+}
+
+/**
+ * Read one optional positive limit, rejecting a task that states it wrongly.
+ * @param file - the task file, for the message.
+ * @param source - the raw task document.
+ * @param name - the field name.
+ * @returns the field when present and valid, otherwise an empty object.
+ */
+function limitField(
+  file: string,
+  source: Record<string, unknown>,
+  name: 'attempt_timeout_ms' | 'max_steps_per_attempt' | 'max_tokens_per_attempt' | 'repeat_action_limit',
+): Partial<Record<typeof name, number>> {
+  const value = optionalPositiveInt(file, source, name)
+  return value === undefined ? {} : { [name]: value }
 }
 
 /**
@@ -293,8 +313,31 @@ export async function loadTasks(manifestPath: string): Promise<{
     seen.add(task.task_id)
     tasks.push(task)
   }
-  const defaults = (manifest.defaults ?? {}) as TaskDefaults
+  const defaults = defaultsOf(manifestPath, manifest.defaults)
   return { root, defaults, tasks }
+}
+
+/**
+ * Validate the limits a manifest shares across its tasks.
+ *
+ * The other default fields are consumed by the attempt loop, which applies its
+ * own fallbacks; a stated limit is checked here so a typo fails at load rather
+ * than silently removing the bound a run was relying on.
+ *
+ * @param file - the manifest path, for the message.
+ * @param source - the raw `defaults` mapping.
+ * @returns the defaults, with every stated limit checked.
+ */
+function defaultsOf(file: string, source: unknown): TaskDefaults {
+  if (source === undefined) return {}
+  if (typeof source !== 'object' || source === null || Array.isArray(source)) {
+    throw new TaskDefinitionError(file, '"defaults" must be a mapping')
+  }
+  const raw = source as Record<string, unknown>
+  for (const name of ['attempt_timeout_ms', 'max_steps_per_attempt', 'max_tokens_per_attempt', 'repeat_action_limit'] as const) {
+    optionalPositiveInt(file, raw, name)
+  }
+  return raw
 }
 
 /** The manifest shape a caller may hand to {@link loadTasks} directly. */

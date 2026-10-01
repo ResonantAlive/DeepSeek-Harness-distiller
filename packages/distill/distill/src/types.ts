@@ -99,6 +99,14 @@ export interface TaskDefinition {
   readonly tags?: readonly string[]
   /** Whether a later attempt is told why the previous one failed. Defaults to false. */
   readonly carry_failure_feedback?: boolean
+  /** Milliseconds one attempt may run before it is abandoned. */
+  readonly attempt_timeout_ms?: number
+  /** Assistant steps one attempt may take before it is over its budget. */
+  readonly max_steps_per_attempt?: number
+  /** Tokens one attempt may spend, counted from the adapter's own usage. */
+  readonly max_tokens_per_attempt?: number
+  /** Identical consecutive tool calls that mark an attempt as stuck. */
+  readonly repeat_action_limit?: number
 }
 
 /** Defaults applied to every task that omits a field. */
@@ -117,6 +125,14 @@ export interface TaskDefaults {
   readonly infra_error_max?: number
   /** Whether a later attempt is told why the previous one failed; defaults to false. */
   readonly carry_failure_feedback?: boolean
+  /** Milliseconds one attempt may run before it is abandoned. */
+  readonly attempt_timeout_ms?: number
+  /** Assistant steps one attempt may take before it is over its budget. */
+  readonly max_steps_per_attempt?: number
+  /** Tokens one attempt may spend, counted from the adapter's own usage. */
+  readonly max_tokens_per_attempt?: number
+  /** Identical consecutive tool calls that mark an attempt as stuck. */
+  readonly repeat_action_limit?: number
 }
 
 /** The task manifest. */

@@ -5,6 +5,8 @@ kind: "package-reference"
 
 # @deepseek-ai/dsh-distill-trajectory-events
 
+English | [中文](README.zh.md)
+
 ## Summary
 
 Use `dsh-distill-trajectory-events` to record what an agent did while it worked, rather than reconstructing it from prose afterwards. A `TrajectoryRecorder` subscribes to the session log and the live assistant stream and writes a structured raw event for every activity: turn and step boundaries, each model decision with its tool calls, every tool result, the request configuration, and streamed reasoning and text deltas.

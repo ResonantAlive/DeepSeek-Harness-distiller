@@ -5,6 +5,8 @@ kind: "package-reference"
 
 # @deepseek-ai/dsh-distill-resource
 
+English | [中文](README.zh.md)
+
 ## Summary
 
 Use `dsh-distill-resource` to decide how many tasks a distillation run may execute at once and how much of the host each may claim. It reads the CPU and memory the host actually allows — the cgroup limit when a container imposes one, the operating system's figure otherwise — validates a batch partitioning against that budget before the run starts, and admits tasks through a gate that keeps a claim from eating the reserve.

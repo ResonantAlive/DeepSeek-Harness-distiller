@@ -44,6 +44,25 @@ export interface AttemptContext {
   readonly recorder: TrajectoryRecorder
   /** The prompt to submit, including failure feedback when the task asks for it. */
   readonly prompt: string
+  /**
+   * The attempt's budgets, resolved from the task and the manifest defaults.
+   *
+   * The agent side owns the turn, so it is the side that can act on a deadline
+   * or a step budget; the runner records whatever the turn produced either way.
+   */
+  readonly limits: AttemptLimits
+}
+
+/** The bounds one attempt runs under. */
+export interface AttemptLimits {
+  /** Milliseconds the attempt may run before it is abandoned. */
+  readonly attempt_timeout_ms?: number
+  /** Assistant steps the attempt may take. */
+  readonly max_steps_per_attempt?: number
+  /** Tokens the attempt may spend, counted from the adapter's own usage. */
+  readonly max_tokens_per_attempt?: number
+  /** Identical consecutive tool calls that mark the attempt as stuck. */
+  readonly repeat_action_limit?: number
 }
 
 /** What one attempt produced. */
@@ -119,6 +138,25 @@ export interface TaskResult {
  */
 export function attemptIdFor(ordinal: number): string {
   return `attempt_${String(ordinal + 1).padStart(3, '0')}`
+}
+
+/**
+ * Resolve one attempt's budgets, letting the task override the manifest.
+ * @param task - the task, whose own fields win.
+ * @param defaults - the manifest's shared values.
+ * @returns only the limits that are stated somewhere.
+ */
+export function attemptLimits(task: TaskDefinition, defaults: TaskDefaults): AttemptLimits {
+  const timeout = task.attempt_timeout_ms ?? defaults.attempt_timeout_ms
+  const steps = task.max_steps_per_attempt ?? defaults.max_steps_per_attempt
+  const tokens = task.max_tokens_per_attempt ?? defaults.max_tokens_per_attempt
+  const repeats = task.repeat_action_limit ?? defaults.repeat_action_limit
+  return {
+    ...timeout === undefined ? {} : { attempt_timeout_ms: timeout },
+    ...steps === undefined ? {} : { max_steps_per_attempt: steps },
+    ...tokens === undefined ? {} : { max_tokens_per_attempt: tokens },
+    ...repeats === undefined ? {} : { repeat_action_limit: repeats },
+  }
 }
 
 /**
@@ -230,6 +268,7 @@ export async function runTask(options: RunTaskOptions): Promise<TaskResult> {
         carryFailureFeedback: carryFeedback,
         ...lastFailure === undefined ? {} : { lastFailure },
       }),
+      limits: attemptLimits(task, defaults),
     }
     await recorder.append('task_start', {
       task_id: task.task_id,
