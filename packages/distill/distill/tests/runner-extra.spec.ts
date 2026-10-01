@@ -416,7 +416,7 @@ describe('attempt budgets', () => {
     // Actions come from the committed call, not from the decision that announced it.
     { event_type: 'tool_call', payload: { step: 0, tool_call_id: 'c1', tool, arguments: args } },
   ]
-  const event = (event_type: string, payload: Record<string, unknown>): RawEvent => ({
+  const event = (event_type: string, payload: Record<string, unknown>, monotonic_ms = 0): RawEvent => ({
     event_id: `id-${event_type}-${Math.random()}`,
     seq: 0,
     task_id: 'T',
@@ -424,8 +424,25 @@ describe('attempt budgets', () => {
     batch_id: 'batch_0',
     event_type,
     timestamp: '2026-01-01T00:00:00.000Z',
-    monotonic_ms: 0,
+    monotonic_ms,
     payload,
+  })
+
+  it('measures how long a tool ran, not how long the turn did', () => {
+    const trajectory = buildTrajectory([
+      event('assistant_message', { step: 0, decision: { text: 'run', reasoning: null, reasoning_available: false, tool_calls: [] } }),
+      event('tool_call', { step: 0, tool_call_id: 'c1', tool: 'bash', arguments: '{"command":"ls"}' }, 1000),
+      event('tool_result', { step: 0, tool_call_id: 'c1', is_error: false, content: 'files' }, 1750),
+    ], options)
+    expect(trajectory.trajectory[0]?.observations[0]?.duration_ms).toBe(750)
+  })
+
+  it('reports a result whose call was never recorded as unmeasured', () => {
+    const trajectory = buildTrajectory([
+      event('assistant_message', { step: 0, decision: { text: 'run', reasoning: null, reasoning_available: false, tool_calls: [] } }),
+      event('tool_result', { step: 0, tool_call_id: 'orphan', is_error: false, content: 'files' }, 1750),
+    ], options)
+    expect(trajectory.trajectory[0]?.observations[0]?.duration_ms).toBeNull()
   })
 
   it('lets the task override the manifest defaults', () => {

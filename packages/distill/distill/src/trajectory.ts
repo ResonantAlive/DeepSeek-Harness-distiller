@@ -52,6 +52,13 @@ export interface StepObservation {
   readonly content: unknown
   /** Structured failure identity, when the tool reported one. */
   readonly error: unknown
+  /**
+   * Milliseconds between the committed call and its committed result.
+   *
+   * `null` when the attempt recorded a result whose call it never recorded, so a
+   * missing measurement is never reported as a fast tool.
+   */
+  readonly duration_ms: number | null
   /** Terminal shape, present when the invoking tool ran a shell command. */
   readonly terminal?: {
     readonly shell: string
@@ -216,6 +223,8 @@ export function buildTrajectory(
 ): AttemptTrajectory {
   const steps: TrajectoryStep[] = []
   let pending: Pending | undefined
+  // When each call was committed, so a result can report how long its tool ran.
+  const calledAt = new Map<string, number>()
   let stepIndex = 0
   let provider = 'unknown'
   let model = 'unknown'
@@ -264,9 +273,11 @@ export function buildTrajectory(
       continue
     }
     if (event.event_type === 'tool_call') {
+      const callId = String(payload.tool_call_id)
+      calledAt.set(callId, event.monotonic_ms)
       pending?.actions.push({
         type: 'tool_call',
-        tool_call_id: String(payload.tool_call_id),
+        tool_call_id: callId,
         tool: String(payload.tool),
         arguments: String(payload.arguments),
       })
@@ -276,6 +287,7 @@ export function buildTrajectory(
       const callId = String(payload.tool_call_id)
       const action = pending?.actions.find(entry => entry.tool_call_id === callId)
       const content = contentText(payload.content)
+      const startedAt = calledAt.get(callId)
       pending?.observations.push({
         type: 'tool_result',
         tool_call_id: callId,
@@ -284,6 +296,9 @@ export function buildTrajectory(
         // recorded form, including a blob preview.
         content: Array.isArray(payload.content) ? content : textOf(payload.content),
         error: payload.error ?? null,
+        // The gap between the committed call and its committed result, which is
+        // how long the tool actually took rather than how long the turn did.
+        duration_ms: startedAt === undefined ? null : Math.max(0, event.monotonic_ms - startedAt),
         ...action === undefined ? {} : {
           terminal: {
             shell: action.tool,
