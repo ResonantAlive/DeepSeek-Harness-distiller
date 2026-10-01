@@ -100,15 +100,13 @@ The runtime half of teacher verification — recording the model the provider ac
 
 -----
 
-<a id="model-experience"></a>
 ## Model Experience
 
-None. The lock runs once at load and writes nothing the model sees; it neither adds a prompt section nor changes a tool schema.
+None, as the lock validates composition configuration at load time and registers no prompt, tool, or session event.
 
 #### KV Cache effect
 
 Nothing here enters a request prefix, so provider cache reuse is unaffected.
-
 ## Known Limitations and Deferred Work
 
 <a id="known-limitations-and-deferred-work"></a>

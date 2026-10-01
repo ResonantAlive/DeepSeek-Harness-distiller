@@ -387,6 +387,7 @@
     { "path": "./packages/distill/teacher-lock" },
     { "path": "./packages/distill/trajectory-events" },
     { "path": "./packages/distill/distill" },
+    { "path": "./packages/distill/resource" },
     { "path": "./packages/fs/fs" },
     { "path": "./packages/fs/fs-local" },
     { "path": "./packages/fs/fs-observation-policy" },

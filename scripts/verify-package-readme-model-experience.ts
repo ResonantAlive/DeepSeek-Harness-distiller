@@ -230,6 +230,11 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
   'packages/web/web-fetch-http': { kind: 'indirect', reason: 'The provider backend delegates model rendering to dsh-tool-web.' },
   'packages/web/web-search-exa': { kind: 'indirect', reason: 'The provider backend delegates model rendering to dsh-tool-web.' },
   'packages/workflow/workflow': { kind: 'indirect', reason: 'The service delegates parent and child model rendering to its consumer and engine.' },
+
+  'packages/distill/redaction': { kind: 'none', reason: 'Redaction runs between a recorded value and the file that stores it; it registers nothing model-facing.' },
+  'packages/distill/teacher-lock': { kind: 'none', reason: 'The lock validates composition configuration at load time and registers no prompt, tool, or session event.' },
+  'packages/distill/trajectory-events': { kind: 'none', reason: 'The recorder observes and persists events; the plugins it observes own every model-visible contribution.' },
+  'packages/distill/resource': { kind: 'none', reason: 'The package partitions host CPU and memory and registers no prompt, tool, or session event.' },
 }
 
 interface Failure {

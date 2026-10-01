@@ -134,15 +134,13 @@ The trajectory a training pipeline consumes is assembled from this log by the di
 
 -----
 
-<a id="model-experience"></a>
 ## Model Experience
 
-None. The recorder observes the model rather than addressing it: it adds no prompt section, changes no tool schema, and writes nothing the model reads back.
+None, as the recorder observes and persists events while the plugins it observes own every model-visible contribution.
 
 #### KV Cache effect
 
 Nothing here enters a request prefix, so provider cache reuse is unaffected.
-
 ## Known Limitations and Deferred Work
 
 <a id="known-limitations-and-deferred-work"></a>

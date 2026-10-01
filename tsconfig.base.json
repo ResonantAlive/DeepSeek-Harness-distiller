@@ -386,6 +386,7 @@
       "@deepseek-ai/dsh-distill-trajectory-events/writer": ["./packages/distill/trajectory-events/src/writer.ts"],
       "@deepseek-ai/dsh-distill-trajectory-events/blobs": ["./packages/distill/trajectory-events/src/blobs.ts"],
       "@deepseek-ai/dsh-distill": ["./packages/distill/distill/src"],
+      "@deepseek-ai/dsh-distill-resource": ["./packages/distill/resource/src"],
       "@deepseek-ai/dsh-distill-app": ["./apps/distill/src"],
       "@deepseek-ai/dsh-file-reference": ["./packages/context/file-reference/src"],
       "@deepseek-ai/dsh-file-reference-local": ["./packages/context/file-reference-local/src"],

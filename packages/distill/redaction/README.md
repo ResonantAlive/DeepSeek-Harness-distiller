@@ -115,15 +115,13 @@ This package is the redaction boundary of the distillation pipeline. The recorde
 
 -----
 
-<a id="model-experience"></a>
 ## Model Experience
 
-None. Nothing here is model-facing: redaction runs between a recorded value and the file that stores it, and no placeholder ever enters a request.
+None, as redaction runs between a recorded value and the file that stores it.
 
 #### KV Cache effect
 
 Nothing here enters a request prefix, so provider cache reuse is unaffected.
-
 ## Known Limitations and Deferred Work
 
 <a id="known-limitations-and-deferred-work"></a>

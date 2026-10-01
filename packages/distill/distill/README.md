@@ -166,14 +166,21 @@ Raw event capture and redaction live in `@deepseek-ai/dsh-distill-trajectory-eve
 
 -----
 
-<a id="model-experience"></a>
 ## Model Experience
 
-The runner does not address the model directly. It supplies the prompt the task declares — task text plus initial context, and the previous failure only when `carry_failure_feedback` is on — and observes everything else.
+### Task prompt
+
+#### What the model sees
+
+The runner supplies the text each task declares: the task's `prompt`, its `initial_context` when present, and the previous attempt's failure reason only when the task sets `carry_failure_feedback`. It registers no system prompt, tool, tool schema, or session event of its own.
+
+#### Token effect
+
+One prompt per attempt. Attempts are independent, so a retry is charged the declared prompt again rather than a growing transcript.
 
 #### KV Cache effect
 
-Attempts are independent, so each one starts a new request series with no shared prefix across attempts. Within an attempt the agent loop owns cache behavior.
+Attempts are independent, so each starts a new request series with no shared prefix across attempts; the agent loop owns cache behavior within an attempt.
 
 ## Known Limitations and Deferred Work
 
@@ -181,7 +188,7 @@ Attempts are independent, so each one starts a new request series with no shared
 
 - **File capture is tool-visible only.** The runner records what it can fingerprint around the attempt. It does not snapshot the workspace before every action, so `file_capture.coverage` reports `file-tools-only` and `git` is `false` until a repository-backed capture is wired in.
 - **The infrastructure budget is per task.** `infra_error_max` bounds one task's retries; a scheduler-wide API budget is not part of this package.
-- **No resource partitioning.** Attempts run in the calling process with whatever concurrency the caller provides. CPU, memory, and batch admission are not enforced here.
+- **Batch admission lives in a companion package.** This package runs one task at a time. Concurrency, CPU and memory partitioning, and the over-allocation refusal live in `@deepseek-ai/dsh-distill-resource`; a caller that ignores it runs unpartitioned.
 - **A crash leaves an attempt incomplete.** Resuming marks an unfinished attempt only if the caller inspects the run directory; the runner does not repair a previous process's attempt on its own.
 - **`expectedTeacherModel` is optional.** Without it, no teacher-identity check runs and a trajectory's model is only as trustworthy as the adapter that recorded it.
 
