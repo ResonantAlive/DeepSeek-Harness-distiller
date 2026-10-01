@@ -14,7 +14,7 @@
 
 import { mkdir } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
-import { DatasetWriter } from '@deepseek-ai/dsh-distill'
+import { DatasetWriter, rateLimitOf, RateLimitGate } from '@deepseek-ai/dsh-distill'
 import { loadTasks } from '@deepseek-ai/dsh-distill'
 import { runTask } from '@deepseek-ai/dsh-distill'
 import type { AgentRunner } from '@deepseek-ai/dsh-distill'
@@ -38,6 +38,10 @@ export interface RunnerArgs {
   readonly only?: readonly string[]
   /** Milliseconds one attempt may run before it is abandoned. */
   readonly attemptTimeoutMs?: number
+  /** Attempts the run may have in flight against the provider. */
+  readonly maxConcurrentTasks?: number
+  /** Milliseconds to hold back when a rate limit states no wait. */
+  readonly rateLimitBackoffMs?: number
 }
 
 /**
@@ -53,6 +57,8 @@ export function parseRunnerArgs(argv: readonly string[]): RunnerArgs {
   let evaluators: string | undefined
   let runs: string | undefined
   let attemptTimeoutMs: number | undefined
+  let maxConcurrentTasks: number | undefined
+  let rateLimitBackoffMs: number | undefined
   const only: string[] = []
   for (let index = 0; index < argv.length; index++) {
     const flag = argv[index]
@@ -78,6 +84,24 @@ export function parseRunnerArgs(argv: readonly string[]): RunnerArgs {
         attemptTimeoutMs = parsed
         break
       }
+      case '--max-concurrent-tasks': {
+        const raw = take()
+        const parsed = Number(raw)
+        if (!Number.isInteger(parsed) || parsed <= 0) {
+          throw new Error(`--max-concurrent-tasks must be a positive whole number, received ${raw}`)
+        }
+        maxConcurrentTasks = parsed
+        break
+      }
+      case '--rate-limit-backoff-ms': {
+        const raw = take()
+        const parsed = Number(raw)
+        if (!Number.isFinite(parsed) || parsed < 0) {
+          throw new Error(`--rate-limit-backoff-ms must be a non-negative number, received ${raw}`)
+        }
+        rateLimitBackoffMs = parsed
+        break
+      }
       default: throw new Error(`unknown argument ${JSON.stringify(String(flag))}`)
     }
   }
@@ -91,6 +115,8 @@ export function parseRunnerArgs(argv: readonly string[]): RunnerArgs {
     ...runs === undefined ? {} : { runs: resolve(runs) },
     ...only.length === 0 ? {} : { only },
     ...attemptTimeoutMs === undefined ? {} : { attemptTimeoutMs },
+    ...maxConcurrentTasks === undefined ? {} : { maxConcurrentTasks },
+    ...rateLimitBackoffMs === undefined ? {} : { rateLimitBackoffMs },
   }
 }
 
@@ -126,13 +152,19 @@ export async function runAll(
   await mkdir(args.out, { recursive: true })
   await mkdir(runs, { recursive: true })
   const dataset = new DatasetWriter({ root: args.out })
+  // One gate for the whole run: the provider counts requests per account, not
+  // per task, so the bound has to outlive any single task.
+  const gate = new RateLimitGate({
+    ...args.maxConcurrentTasks === undefined ? {} : { maxConcurrent: args.maxConcurrentTasks },
+    ...args.rateLimitBackoffMs === undefined ? {} : { defaultBackoffMs: args.rateLimitBackoffMs },
+  })
   const selected = args.only === undefined
     ? loaded.tasks
     : loaded.tasks.filter(task => args.only?.includes(task.task_id))
   const reports: RunReport[] = []
   for (const task of selected) {
     if (await dataset.completed(task.task_id) !== undefined) continue
-    const result = await runTask({
+    const result = await gate.run(async () => runTask({
       task,
       defaults: loaded.defaults,
       templatesRoot: resolve(templates),
@@ -141,7 +173,14 @@ export async function runAll(
       dataset,
       agent,
       ...options.secrets === undefined ? {} : { secrets: options.secrets },
-    })
+    }))
+    // A refusal the attempt loop recorded as an infrastructure failure is how a
+    // rate limit reaches this layer, so the gate learns the wait from the text
+    // the attempt kept rather than from a status code it no longer has.
+    for (const attempt of result.attempts) {
+      const notice = rateLimitOf(`${JSON.stringify(attempt.evaluation ?? null)} ${attempt.final}`)
+      if (notice !== undefined) gate.noteRefused(notice)
+    }
     reports.push({
       taskId: result.taskId,
       status: result.status,
