@@ -94,6 +94,7 @@ const release = await gate.acquire(
 
 当批次索引未被声明、当某项占用会吃掉预留量、当调用方的信号被中止，或在期限之前没有空位出现时，它会以 `AdmissionRefusedError` 拒绝。
 
+<a id="understand-the-implementation"></a>
 ## 理解实现
 
 <details>
@@ -144,6 +145,7 @@ sum(batch.memoryMb)   + reservedMemoryMb   <= host.memoryMb
 
 -----
 
+<a id="model-experience"></a>
 ## 模型体验
 
 无：本包划分宿主 CPU 与内存，不注册任何提示词、工具或会话事件。

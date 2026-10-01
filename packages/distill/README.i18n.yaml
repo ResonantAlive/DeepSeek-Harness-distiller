@@ -1,0 +1,25 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/distill/README.md
+/:
+  en: 779eeafafa00a902
+  zh: e50a3f26f01003d1
+/distill-teacher-trajectory-distillation:
+  en: a7af474af83bb491
+  zh: 627249c4bfdfd3e3
+/distill-teacher-trajectory-distillation/summary:
+  en: 99ff2656fbe4110c
+  zh: 77560558bed4c5fd
+/distill-teacher-trajectory-distillation/table-of-contents:
+  en: 1eb35b015a6c423f
+  zh: a8a3dceee2c9e943
+/distill-teacher-trajectory-distillation/packages:
+  en: d4a0291b0100f6df
+  zh: d6d915712950fcfd
+/distill-teacher-trajectory-distillation/related-documentation:
+  en: c993b316de490b49
+  zh: 25d94d5f277f6afc
+/distill-teacher-trajectory-distillation/related-documentation/dev-note:
+  en: 0a1253c6f7b5e8b9
+  zh: 9f56528562c7c914

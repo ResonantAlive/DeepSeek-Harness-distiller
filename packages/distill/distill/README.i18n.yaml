@@ -1,0 +1,70 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/distill/distill/README.md
+/:
+  en: 158e58c531e76e91
+  zh: c4433a63ca94191d
+/deepseek-ai-dsh-distill:
+  en: 6b575cb9a1fc8042
+  zh: 2f51bd95429b074f
+/deepseek-ai-dsh-distill/summary:
+  en: ea0242ec6829fda6
+  zh: 4adf7eab65f7e3e3
+/deepseek-ai-dsh-distill/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-distill/use-this-package:
+  en: 0502523ef656f9e3
+  zh: e5c6ceb83b54cac9
+/deepseek-ai-dsh-distill/use-this-package/task-definition:
+  en: e3c0754d90d87b54
+  zh: beaa36c30a9dec26
+/deepseek-ai-dsh-distill/use-this-package/attempts-and-statuses:
+  en: 2323b453444da4f9
+  zh: 36dad4cca44e98fb
+/deepseek-ai-dsh-distill/use-this-package/integrity-flags:
+  en: 398e711d5f47428b
+  zh: 3b40b6989d9b8e5b
+/deepseek-ai-dsh-distill/use-this-package/dataset-layout:
+  en: 03ebed0687d51266
+  zh: eb5d6866df2a7fc4
+/deepseek-ai-dsh-distill/understand-the-implementation:
+  en: 42b15ac6321706aa
+  zh: 4ed0861911abaf5d
+/deepseek-ai-dsh-distill/understand-the-implementation/why-the-agent-side-is-an-interface:
+  en: 6c4c3feb92ca6dc5
+  zh: 92062596d6142cb1
+/deepseek-ai-dsh-distill/understand-the-implementation/order-of-operations-in-one-attempt:
+  en: 4753f23fe9cd6a7c
+  zh: 0347edc81cf35413
+/deepseek-ai-dsh-distill/understand-the-implementation/fingerprints-and-attribution:
+  en: 1c79c9e75e02a6fa
+  zh: eb2b569146f9c08b
+/deepseek-ai-dsh-distill/understand-the-implementation/source-map:
+  en: f2b7fc279663fcbf
+  zh: 08fe81b4f0d6ba52
+/deepseek-ai-dsh-distill/further-exploration:
+  en: 6e5c850ab062712d
+  zh: d43a425b29727c1f
+/deepseek-ai-dsh-distill/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-distill/model-experience/task-prompt:
+  en: f40e618678d098ea
+  zh: 9c1419903091d03d
+/deepseek-ai-dsh-distill/model-experience/task-prompt/what-the-model-sees:
+  en: d7833446ab1c573e
+  zh: ab77e80d7ce99f2b
+/deepseek-ai-dsh-distill/model-experience/task-prompt/token-effect:
+  en: 2439a826943488ee
+  zh: 8e1d2e48685d83b6
+/deepseek-ai-dsh-distill/model-experience/task-prompt/kv-cache-effect:
+  en: 197e845676fd57c2
+  zh: e9734c665333bf63
+/deepseek-ai-dsh-distill/known-limitations-and-deferred-work:
+  en: 43faac8ab967ba43
+  zh: 1b675daff76283c8
+/deepseek-ai-dsh-distill/known-limitations-and-deferred-work/dev-note:
+  en: 0a1253c6f7b5e8b9
+  zh: 9f56528562c7c914

@@ -1,0 +1,46 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/distill/teacher-lock/README.md
+/:
+  en: 40ac47f69e10dd44
+  zh: bb0ca530075c11df
+/deepseek-ai-dsh-distill-teacher-lock:
+  en: d628ac92bd58cf23
+  zh: cb0b4be9af39e00f
+/deepseek-ai-dsh-distill-teacher-lock/summary:
+  en: 6ae20f5edf04baf1
+  zh: 351c029e4e7f579e
+/deepseek-ai-dsh-distill-teacher-lock/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-distill-teacher-lock/use-this-package:
+  en: ea5e2bc0e974bd81
+  zh: 4909acabaaf86bda
+/deepseek-ai-dsh-distill-teacher-lock/use-this-package/where-the-locked-model-comes-from:
+  en: 2f04465b8413c799
+  zh: f2327aca98938157
+/deepseek-ai-dsh-distill-teacher-lock/use-this-package/failures-to-plan-for:
+  en: a03ad5a0667927f8
+  zh: 4e73ee1dda10d0b2
+/deepseek-ai-dsh-distill-teacher-lock/understand-the-implementation:
+  en: 06204f95e9698920
+  zh: 2085dfc27d91f45f
+/deepseek-ai-dsh-distill-teacher-lock/understand-the-implementation/source-map:
+  en: a6377d23ab5dee2a
+  zh: 7512794d4419e862
+/deepseek-ai-dsh-distill-teacher-lock/further-exploration:
+  en: 67774dfda292a888
+  zh: e1a14d0b60ebc8a0
+/deepseek-ai-dsh-distill-teacher-lock/model-experience:
+  en: a03b334b124a0894
+  zh: 9085cf0d09db2090
+/deepseek-ai-dsh-distill-teacher-lock/model-experience/kv-cache-effect:
+  en: 815e93723a98919c
+  zh: 921da870f67e4033
+/deepseek-ai-dsh-distill-teacher-lock/known-limitations-and-deferred-work:
+  en: 949fe67d52cd363d
+  zh: 4d6a63e079eefb64
+/deepseek-ai-dsh-distill-teacher-lock/known-limitations-and-deferred-work/dev-note:
+  en: 0a1253c6f7b5e8b9
+  zh: 9f56528562c7c914

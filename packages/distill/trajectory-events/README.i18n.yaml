@@ -1,0 +1,61 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/distill/trajectory-events/README.md
+/:
+  en: fb9eb1d62bf463a5
+  zh: d8194cf753c33c32
+/deepseek-ai-dsh-distill-trajectory-events:
+  en: 0ea8a6fcfcef4396
+  zh: 311c22ce34aa7c5f
+/deepseek-ai-dsh-distill-trajectory-events/summary:
+  en: d3408eecb0ca6501
+  zh: 6c399990e5846e58
+/deepseek-ai-dsh-distill-trajectory-events/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-distill-trajectory-events/use-this-package:
+  en: 9a2f0b848d7ad713
+  zh: 1aa3fbfdb6a76b27
+/deepseek-ai-dsh-distill-trajectory-events/use-this-package/recorded-event-kinds:
+  en: 482f0c2d01fe896e
+  zh: 8569a00d7a3740e4
+/deepseek-ai-dsh-distill-trajectory-events/use-this-package/the-event-envelope:
+  en: 5028278414fbca62
+  zh: 34edeaa4ebe5ffbb
+/deepseek-ai-dsh-distill-trajectory-events/use-this-package/reasoning-is-reported-never-invented:
+  en: 84c186e5bc734450
+  zh: a79bb5eca58a090e
+/deepseek-ai-dsh-distill-trajectory-events/use-this-package/blob-references:
+  en: 9331158dd1e6c996
+  zh: 9c1674d6f9003284
+/deepseek-ai-dsh-distill-trajectory-events/understand-the-implementation:
+  en: 42b15ac6321706aa
+  zh: 4ed0861911abaf5d
+/deepseek-ai-dsh-distill-trajectory-events/understand-the-implementation/why-the-two-phase-plan-append-split:
+  en: 2896904bb17d6580
+  zh: c8cbb8fd2b945360
+/deepseek-ai-dsh-distill-trajectory-events/understand-the-implementation/ordering-and-failure:
+  en: 9bc9c0d43f8beff9
+  zh: a4baca23d34f0d24
+/deepseek-ai-dsh-distill-trajectory-events/understand-the-implementation/event-coverage:
+  en: 7b2aeadcdb2cdb99
+  zh: 7f8f587f28942192
+/deepseek-ai-dsh-distill-trajectory-events/understand-the-implementation/source-map:
+  en: 628f98ccad7d5419
+  zh: da637be4cfea840e
+/deepseek-ai-dsh-distill-trajectory-events/further-exploration:
+  en: 63823c57e242ed1c
+  zh: 8c31ef20c81a813b
+/deepseek-ai-dsh-distill-trajectory-events/model-experience:
+  en: b6e0d7a02299978b
+  zh: 1f9fd0ba2bc8cd3e
+/deepseek-ai-dsh-distill-trajectory-events/model-experience/kv-cache-effect:
+  en: 815e93723a98919c
+  zh: 921da870f67e4033
+/deepseek-ai-dsh-distill-trajectory-events/known-limitations-and-deferred-work:
+  en: 12ff8109261de5ba
+  zh: f2d99ee8049f14ac
+/deepseek-ai-dsh-distill-trajectory-events/known-limitations-and-deferred-work/dev-note:
+  en: 773a374931a34f9c
+  zh: b70b77eba509b412

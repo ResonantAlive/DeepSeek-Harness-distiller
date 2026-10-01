@@ -108,6 +108,15 @@ const GROUP_ORDER = [
 
 const SERVICE_ROLES: ServiceRole[] = [
   {
+    key: 'distillCapture',
+    pkg: 'distill-trajectory-events',
+    title: 'Live attempt capture routing',
+    mode: 'service',
+    implementations: ['distill-trajectory-events'],
+    consumers: ['distill-app'],
+    note: 'Routes committed session and stream events to the attempt bound for its own lifetime; the attempt runner binds a recorder and releases it when the attempt settles.',
+  },
+  {
     key: 'hmr',
     pkg: 'hmr',
     title: 'Serialized module and configuration reloads',

@@ -122,6 +122,7 @@ tags: [coding, node]
 
 `index.jsonl` 在独占锁下追加，包含任务的状态、attempt 数量、被选中的 attempt、完整性标记、教师与目录——因此无需扫描整棵树就能追踪一个 `task_id`。
 
+<a id="understand-the-implementation"></a>
 ## 理解实现
 
 <details>
@@ -168,6 +169,7 @@ tags: [coding, node]
 
 -----
 
+<a id="model-experience"></a>
 ## 模型体验
 
 ### 任务提示词

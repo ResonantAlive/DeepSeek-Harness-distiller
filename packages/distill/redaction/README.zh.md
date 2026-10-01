@@ -117,6 +117,7 @@ const { value } = redactor.redactValue(event)
 
 -----
 
+<a id="model-experience"></a>
 ## 模型体验
 
 无：脱敏运行在已记录的值与存储它的文件之间。

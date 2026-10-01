@@ -830,7 +830,8 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-distill-teacher-lock`
 
-- `source`: [`packages/distill/teacher-lock/src/index.ts:30`](../packages/distill/teacher-lock/src/index.ts)
+- `inject`: `agentDefaultModel`
+- `source`: [`packages/distill/teacher-lock/src/index.ts:39`](../packages/distill/teacher-lock/src/index.ts)
 
 ```ts config-catalog
 /** Plugin configuration. */

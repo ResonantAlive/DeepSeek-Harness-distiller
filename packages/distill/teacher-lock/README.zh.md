@@ -72,6 +72,7 @@ kind: "package-reference"
 
 已退役的别名（`deepseek-v4-flash`、`deepseek-v4-flash-vision-exp`）会被**接受**并以警告级别记录，因为提供方仍会将其路由到当前教师；锁会报告 `legacy: true`，以便操作者更新已记录的 id。
 
+<a id="understand-the-implementation"></a>
 ## 理解实现
 
 <details>
@@ -102,6 +103,7 @@ kind: "package-reference"
 
 -----
 
+<a id="model-experience"></a>
 ## 模型体验
 
 无：锁在加载时校验组合配置，不注册任何提示词、工具或会话事件。

@@ -95,6 +95,7 @@ runs/<task_id>/<attempt_id>/
 
 `boundedJson(value, budget)` 生成该预览，并导出给需要同样有界渲染的调用方。对 JSON 输入它总是返回合法 JSON：容器只有在其闭合定界符也能容纳时才会被提交，因此对容器而言过小的预算会什么都不输出，而不是输出无法解析的片段。
 
+<a id="understand-the-implementation"></a>
 ## 理解实现
 
 <details>
@@ -134,6 +135,7 @@ runs/<task_id>/<attempt_id>/
 
 -----
 
+<a id="model-experience"></a>
 ## 模型体验
 
 无：记录器观察并持久化事件，而它所观察的插件拥有每一项模型可见的贡献。

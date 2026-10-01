@@ -1,0 +1,61 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/distill/redaction/README.md
+/:
+  en: 2eb102f531561bad
+  zh: b15c497301341eaf
+/deepseek-ai-dsh-distill-redaction:
+  en: bdc24d97c50f9513
+  zh: 14b7008f1fa5e9a0
+/deepseek-ai-dsh-distill-redaction/summary:
+  en: 51800bac967c6256
+  zh: ddaa4571abd9b7fe
+/deepseek-ai-dsh-distill-redaction/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-distill-redaction/use-this-package:
+  en: a7627c688b31e988
+  zh: 1a71331792ecc508
+/deepseek-ai-dsh-distill-redaction/use-this-package/redacting-a-string:
+  en: bc7e00b5b9cfd25e
+  zh: 59fd8afed32fcb07
+/deepseek-ai-dsh-distill-redaction/use-this-package/redacting-a-json-value:
+  en: 6d98cd3b701e290f
+  zh: 0843486749e4b688
+/deepseek-ai-dsh-distill-redaction/use-this-package/choosing-what-to-hide:
+  en: 0cd0e72e69d0c8d7
+  zh: e362cc43c05bd179
+/deepseek-ai-dsh-distill-redaction/use-this-package/the-default-rules:
+  en: e5a22240395790b3
+  zh: 07da8127c100c491
+/deepseek-ai-dsh-distill-redaction/use-this-package/failures-to-plan-for:
+  en: 797fc30b54f972e6
+  zh: 9268435488c8548e
+/deepseek-ai-dsh-distill-redaction/understand-the-implementation:
+  en: 2b0348ee1340d73c
+  zh: c086f11c0f8d9f0d
+/deepseek-ai-dsh-distill-redaction/understand-the-implementation/phase-one-locate-candidates:
+  en: b0ba4b49a0d61323
+  zh: 9ceb44908dd4d055
+/deepseek-ai-dsh-distill-redaction/understand-the-implementation/phase-two-apply-winners:
+  en: 3d17350e02234030
+  zh: 1c5c54740aa48c38
+/deepseek-ai-dsh-distill-redaction/understand-the-implementation/source-map:
+  en: ffb21fd35d18bb3e
+  zh: 7d16e28d7c7e7d95
+/deepseek-ai-dsh-distill-redaction/further-exploration:
+  en: b9f5a41d1b130683
+  zh: fc8e083723fecc4e
+/deepseek-ai-dsh-distill-redaction/model-experience:
+  en: 53a64ed4dfde2889
+  zh: 6eebe526983aa4fb
+/deepseek-ai-dsh-distill-redaction/model-experience/kv-cache-effect:
+  en: 815e93723a98919c
+  zh: 921da870f67e4033
+/deepseek-ai-dsh-distill-redaction/known-limitations-and-deferred-work:
+  en: 5d55a9f1a6ecb610
+  zh: 7c8062c63194c605
+/deepseek-ai-dsh-distill-redaction/known-limitations-and-deferred-work/dev-note:
+  en: 0a1253c6f7b5e8b9
+  zh: 9f56528562c7c914
