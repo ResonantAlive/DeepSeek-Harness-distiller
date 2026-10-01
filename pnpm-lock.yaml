@@ -748,12 +748,30 @@ importers:
 
   apps/distill:
     dependencies:
+      '@deepseek-ai/dsh-agent-default-model':
+        specifier: workspace:*
+        version: link:../../packages/core/agent-default-model
+      '@deepseek-ai/dsh-app-boot':
+        specifier: workspace:*
+        version: link:../../packages/boot/app-boot
       '@deepseek-ai/dsh-distill':
         specifier: workspace:*
         version: link:../../packages/distill/distill
       '@deepseek-ai/dsh-distill-redaction':
         specifier: workspace:*
         version: link:../../packages/distill/redaction
+      '@deepseek-ai/dsh-distill-resource':
+        specifier: workspace:*
+        version: link:../../packages/distill/resource
+      '@deepseek-ai/dsh-distill-teacher-lock':
+        specifier: workspace:*
+        version: link:../../packages/distill/teacher-lock
+      '@deepseek-ai/dsh-distill-trajectory-events':
+        specifier: workspace:*
+        version: link:../../packages/distill/trajectory-events
+      '@deepseek-ai/dsh-llm':
+        specifier: workspace:*
+        version: link:../../packages/llm/llm
 
   apps/web:
     devDependencies:
@@ -7224,6 +7242,8 @@ importers:
       '@deepseek-ai/cordis':
         specifier: workspace:~
         version: link:../../../vendor/cordis
+
+  packages/distill/resource: {}
 
   packages/distill/teacher-lock:
     dependencies:

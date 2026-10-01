@@ -6,6 +6,7 @@
   "type": "module",
   "license": "MIT",
   "dependencies": {
+    "@deepseek-ai/dsh-agent-default-model": "workspace:*",
     "@deepseek-ai/dsh-app-boot": "workspace:*",
     "@deepseek-ai/dsh-distill": "workspace:*",
     "@deepseek-ai/dsh-distill-redaction": "workspace:*",
@@ -15,6 +16,7 @@
     "@deepseek-ai/dsh-llm": "workspace:*"
   },
   "devDependencies": {
+    "@deepseek-ai/dsh-agent-default-model": "workspace:*",
     "@deepseek-ai/dsh-app-boot": "workspace:*",
     "@deepseek-ai/dsh-distill": "workspace:*",
     "@deepseek-ai/dsh-distill-redaction": "workspace:*",

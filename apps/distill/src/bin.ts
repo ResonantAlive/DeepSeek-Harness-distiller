@@ -19,6 +19,8 @@ import { loadTasks } from '@deepseek-ai/dsh-distill'
 import { runTask } from '@deepseek-ai/dsh-distill'
 import type { AgentRunner } from '@deepseek-ai/dsh-distill'
 import { collectEnvironmentSecrets } from '@deepseek-ai/dsh-distill-redaction'
+import { bootDistillComposition, pinnedTeacher } from './composition.ts'
+import { createAgentRunner } from './agent-runner.ts'
 
 /** Parsed command line. */
 export interface RunnerArgs {
@@ -34,6 +36,8 @@ export interface RunnerArgs {
   readonly runs?: string
   /** Task ids to run; omission runs every task. */
   readonly only?: readonly string[]
+  /** Milliseconds one attempt may run before it is abandoned. */
+  readonly attemptTimeoutMs?: number
 }
 
 /**
@@ -48,6 +52,7 @@ export function parseRunnerArgs(argv: readonly string[]): RunnerArgs {
   let templates: string | undefined
   let evaluators: string | undefined
   let runs: string | undefined
+  let attemptTimeoutMs: number | undefined
   const only: string[] = []
   for (let index = 0; index < argv.length; index++) {
     const flag = argv[index]
@@ -64,6 +69,15 @@ export function parseRunnerArgs(argv: readonly string[]): RunnerArgs {
       case '--evaluators': evaluators = take(); break
       case '--runs': runs = take(); break
       case '--task': only.push(take()); break
+      case '--attempt-timeout-ms': {
+        const raw = take()
+        const parsed = Number(raw)
+        if (!Number.isFinite(parsed) || parsed <= 0) {
+          throw new Error(`--attempt-timeout-ms must be a positive number, received ${raw}`)
+        }
+        attemptTimeoutMs = parsed
+        break
+      }
       default: throw new Error(`unknown argument ${JSON.stringify(String(flag))}`)
     }
   }
@@ -76,6 +90,7 @@ export function parseRunnerArgs(argv: readonly string[]): RunnerArgs {
     ...evaluators === undefined ? {} : { evaluators: resolve(evaluators) },
     ...runs === undefined ? {} : { runs: resolve(runs) },
     ...only.length === 0 ? {} : { only },
+    ...attemptTimeoutMs === undefined ? {} : { attemptTimeoutMs },
   }
 }
 
@@ -139,18 +154,50 @@ export async function runAll(
 }
 
 /**
- * Run the runner from the command line.
- * @param argv - arguments after the script name.
- * @param agent - the agent side that executes one attempt.
- * @returns one report per task that ran.
+ * Print one line per finished task.
+ * @param reports - the reports to print.
+ * @returns the same reports.
  */
-export async function main(argv: readonly string[], agent: AgentRunner): Promise<RunReport[]> {
-  const reports = await runAll(parseRunnerArgs(argv), agent, {
-    secrets: collectEnvironmentSecrets(),
-  })
-  for (const report of reports) {
-    const flags = report.integrityFlags.length === 0 ? '' : ` flags=${report.integrityFlags.join(',')}`
-    process.stdout.write(`${report.taskId}: ${report.status} attempts=${String(report.attempts)} -> ${report.datasetDir}${flags}\n`)
+function report(reports: RunReport[]): RunReport[] {
+  for (const entry of reports) {
+    const flags = entry.integrityFlags.length === 0 ? '' : ` flags=${entry.integrityFlags.join(',')}`
+    process.stdout.write(
+      `${entry.taskId}: ${entry.status} attempts=${String(entry.attempts)} -> ${entry.datasetDir}${flags}\n`,
+    )
   }
   return reports
+}
+
+/**
+ * Run the runner from the command line.
+ *
+ * Without an injected agent this boots the `distill` composition through the
+ * Loader and drives the real agent loop, which is how the application runs. An
+ * injected agent is a test seam: it lets a suite exercise the dataset and
+ * judgment paths without reaching a provider.
+ *
+ * @param argv - arguments after the script name.
+ * @param options - an optional agent to use in place of the composed one.
+ * @returns one report per task that ran.
+ */
+export async function main(
+  argv: readonly string[],
+  options: { agent?: AgentRunner } = {},
+): Promise<RunReport[]> {
+  const args = parseRunnerArgs(argv)
+  const secrets = collectEnvironmentSecrets()
+  if (options.agent !== undefined) {
+    return report(await runAll(args, options.agent, { secrets }))
+  }
+  const composition = await bootDistillComposition()
+  try {
+    const agent = createAgentRunner(composition.ctx, {
+      ...pinnedTeacher(composition.ctx),
+      capture: composition.capture,
+      ...args.attemptTimeoutMs === undefined ? {} : { attemptTimeoutMs: args.attemptTimeoutMs },
+    })
+    return report(await runAll(args, agent, { secrets }))
+  } finally {
+    await composition.shutdown()
+  }
 }

@@ -10,6 +10,7 @@
   "references": [
     { "path": "../../vendor/cordis" },
     { "path": "../../packages/boot/app-boot" },
+    { "path": "../../packages/core/agent-default-model" },
     { "path": "../../packages/llm/llm" },
     { "path": "../../packages/distill/distill" },
     { "path": "../../packages/distill/redaction" },
