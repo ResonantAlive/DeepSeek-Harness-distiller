@@ -385,6 +385,8 @@
     { "path": "./packages/deliverables/workspace-changes" },
     { "path": "./packages/distill/redaction" },
     { "path": "./packages/distill/teacher-lock" },
+    { "path": "./packages/distill/trajectory-events" },
+    { "path": "./packages/distill/distill" },
     { "path": "./packages/fs/fs" },
     { "path": "./packages/fs/fs-local" },
     { "path": "./packages/fs/fs-observation-policy" },
@@ -477,6 +479,7 @@
     { "path": "./packages/lsp/lsp-stdio" },
     { "path": "./packages/lsp/tool-lsp" },
     { "path": "./apps/cli" },
+    { "path": "./apps/distill" },
     { "path": "./apps/desktop-host" },
     { "path": "./apps/desktop/tsconfig.host.json" }
   ]

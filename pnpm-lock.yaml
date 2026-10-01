@@ -746,6 +746,15 @@ importers:
         specifier: workspace:*
         version: link:../../packages/skill/skill
 
+  apps/distill:
+    dependencies:
+      '@deepseek-ai/dsh-distill':
+        specifier: workspace:*
+        version: link:../../packages/distill/distill
+      '@deepseek-ai/dsh-distill-redaction':
+        specifier: workspace:*
+        version: link:../../packages/distill/redaction
+
   apps/web:
     devDependencies:
       '@deepseek-ai/cordis-plugin-group':
@@ -7194,6 +7203,63 @@ importers:
         specifier: workspace:*
         version: link:../../core/tools
 
+  packages/distill/distill:
+    dependencies:
+      '@deepseek-ai/dsh-atomic-write':
+        specifier: workspace:*
+        version: link:../../util/atomic-write
+      '@deepseek-ai/dsh-distill-trajectory-events':
+        specifier: workspace:*
+        version: link:../trajectory-events
+      js-yaml:
+        specifier: ^4.2.0
+        version: 4.3.1
+    devDependencies:
+      '@types/js-yaml':
+        specifier: ^4.0.9
+        version: 4.0.9
+
+  packages/distill/redaction:
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:~
+        version: link:../../../vendor/cordis
+
+  packages/distill/teacher-lock:
+    dependencies:
+      '@deepseek-ai/schemastery':
+        specifier: link:../../../vendor/schemastery
+        version: link:../../../vendor/schemastery
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:~
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-agent-default-model':
+        specifier: workspace:*
+        version: link:../../core/agent-default-model
+      '@deepseek-ai/dsh-launch-environment':
+        specifier: workspace:*
+        version: link:../../util/launch-environment
+
+  packages/distill/trajectory-events:
+    dependencies:
+      '@deepseek-ai/dsh-distill-redaction':
+        specifier: workspace:*
+        version: link:../redaction
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:~
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-agent':
+        specifier: workspace:*
+        version: link:../../core/agent
+      '@deepseek-ai/dsh-llm':
+        specifier: workspace:*
+        version: link:../../llm/llm
+      '@deepseek-ai/dsh-session':
+        specifier: workspace:*
+        version: link:../../core/session
+
   packages/document/office-to-pdf:
     dependencies:
       '@deepseek-ai/dsh-brand':
@@ -9693,7 +9759,7 @@ importers:
         version: link:../../../vendor/schemastery
       '@earendil-works/pi-ai':
         specifier: ^0.87.1
-        version: 0.87.1(patch_hash=b9bcce474fb2ac44633dff0fa722816a5bff5451b4575d5874035ea14ba70a4f)(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(ws@8.21.0)(zod@4.4.3)
+        version: 0.87.1(patch_hash=b9bcce474fb2ac44633dff0fa722816a5bff5451b4575d5874035ea14ba70a4f)(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(supports-color@9.4.0)(ws@8.21.0)(zod@4.4.3)
     devDependencies:
       '@deepseek-ai/cordis':
         specifier: workspace:~
@@ -22668,15 +22734,15 @@ snapshots:
     transitivePeerDependencies:
       - '@algolia/client-search'
 
-  '@earendil-works/pi-ai@0.87.1(patch_hash=b9bcce474fb2ac44633dff0fa722816a5bff5451b4575d5874035ea14ba70a4f)(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(ws@8.21.0)(zod@4.4.3)':
+  '@earendil-works/pi-ai@0.87.1(patch_hash=b9bcce474fb2ac44633dff0fa722816a5bff5451b4575d5874035ea14ba70a4f)(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(supports-color@9.4.0)(ws@8.21.0)(zod@4.4.3)':
     dependencies:
       '@anthropic-ai/sdk': 0.124.0(zod@4.4.3)
       '@aws-sdk/client-bedrock-runtime': 3.1127.0
       '@earendil-works/pi-telemetry': 0.87.1
       '@google/genai': 2.21.0(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))
       '@smithy/node-http-handler': 4.12.1
-      http-proxy-agent: 9.1.0
-      https-proxy-agent: 9.1.0
+      http-proxy-agent: 9.1.0(supports-color@9.4.0)
+      https-proxy-agent: 9.1.0(supports-color@9.4.0)
       openai: 6.40.0(ws@8.21.0)(zod@4.4.3)
       partial-json: 0.1.7
       typebox: 1.3.27
@@ -26859,7 +26925,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  http-proxy-agent@9.1.0:
+  http-proxy-agent@9.1.0(supports-color@9.4.0):
     dependencies:
       agent-base: 9.0.0
       debug: 4.4.3(supports-color@9.4.0)
@@ -26918,7 +26984,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  https-proxy-agent@9.1.0:
+  https-proxy-agent@9.1.0(supports-color@9.4.0):
     dependencies:
       agent-base: 9.0.0
       debug: 4.4.3(supports-color@9.4.0)

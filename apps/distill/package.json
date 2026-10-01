@@ -1,0 +1,16 @@
+{
+  "name": "@deepseek-ai/dsh-distill-app",
+  "description": "The standalone distillation runner entry point: load task definitions, execute attempts, and write the labelled dataset",
+  "version": "0.2.0-rc.2",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "dependencies": {
+    "@deepseek-ai/dsh-distill": "workspace:*",
+    "@deepseek-ai/dsh-distill-redaction": "workspace:*"
+  },
+  "devDependencies": {
+    "@deepseek-ai/dsh-distill": "workspace:*",
+    "@deepseek-ai/dsh-distill-redaction": "workspace:*"
+  }
+}

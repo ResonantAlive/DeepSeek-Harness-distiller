@@ -1,0 +1,54 @@
+{
+  "name": "@deepseek-ai/dsh-distill-trajectory-events",
+  "description": "Real-time agent trajectory capture: subscribe to the session log and live assistant stream, redact, spill oversized fields to content-addressed blobs, and append one flushed JSON line per activity",
+  "version": "0.2.0-rc.2",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
+    "directory": "packages/distill/trajectory-events"
+  },
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./writer": {
+      "types": "./lib/types/writer.d.ts",
+      "default": "./lib/writer.js"
+    },
+    "./blobs": {
+      "types": "./lib/types/blobs.d.ts",
+      "default": "./lib/blobs.js"
+    },
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/index.js",
+    "lib/writer.js",
+    "lib/blobs.js",
+    "lib/types/**/*.d.ts"
+  ],
+  "license": "MIT",
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "workspace:~",
+    "@deepseek-ai/dsh-agent": "workspace:*",
+    "@deepseek-ai/dsh-llm": "workspace:*",
+    "@deepseek-ai/dsh-session": "workspace:*"
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh-distill-redaction": "workspace:*"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "workspace:~",
+    "@deepseek-ai/dsh-agent": "workspace:*",
+    "@deepseek-ai/dsh-llm": "workspace:*",
+    "@deepseek-ai/dsh-session": "workspace:*"
+  }
+}
