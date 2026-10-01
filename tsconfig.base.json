@@ -380,6 +380,8 @@
       "@deepseek-ai/dsh-deepseek-llm-api-extensions": ["./packages/llm/deepseek-llm-api-extensions/src"],
       "@deepseek-ai/dsh-deque": ["./packages/util/deque/src"],
       "@deepseek-ai/dsh-distill-redaction": ["./packages/distill/redaction/src"],
+      "@deepseek-ai/dsh-distill-teacher-lock": ["./packages/distill/teacher-lock/src/index.ts"],
+      "@deepseek-ai/dsh-distill-teacher-lock/lock": ["./packages/distill/teacher-lock/src/lock.ts"],
       "@deepseek-ai/dsh-file-reference": ["./packages/context/file-reference/src"],
       "@deepseek-ai/dsh-file-reference-local": ["./packages/context/file-reference-local/src"],
       "@deepseek-ai/dsh-fs": ["./packages/fs/fs/src"],
