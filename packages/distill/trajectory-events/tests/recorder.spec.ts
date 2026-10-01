@@ -7,7 +7,7 @@ import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
 import type { AssistantStreamFrame } from '@deepseek-ai/dsh-agent'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
-import { TrajectoryRecorder, apply, createRecorder, decisionOf, recordUsage } from '../src/index.ts'
+import { TrajectoryCapture, TrajectoryRecorder, apply, captureOf, createRecorder, decisionOf, recordUsage } from '../src/index.ts'
 import type { RawEvent } from '../src/writer.ts'
 
 const SECRET = 'fixture-secret-value-0123456789'
@@ -389,7 +389,11 @@ describe('createRecorder and the capture plugin', () => {
     const root = await scratch()
     const recorder = recorderAt(root)
     const ctx = new Context()
-    apply(ctx, { recorder })
+    apply(ctx)
+    // The runner binds the attempt's recorder; the plugin routes to it.
+    const capture = captureOf(ctx)
+    expect(capture).toBeInstanceOf(TrajectoryCapture)
+    capture?.bind(recorder)
     // A committed session event reaches the recorder through the plugin's own
     // subscription, so this proves the wiring rather than the recorder alone.
     ctx.emit('session/event', session, event('turn/start', 0, { turn: 1 }))
@@ -402,12 +406,29 @@ describe('createRecorder and the capture plugin', () => {
     expect(events.map(entry => entry.event_type).sort()).toEqual(['reasoning_delta', 'task_start'])
   })
 
+  it('records nothing between attempts and stops on release', async () => {
+    const root = await scratch()
+    const recorder = recorderAt(root)
+    const ctx = new Context()
+    apply(ctx)
+    const capture = captureOf(ctx)
+    // Nothing is bound yet, so an event is dropped rather than written somewhere.
+    ctx.emit('session/event', session, event('turn/start', 0, { turn: 1 }))
+    const release = capture?.bind(recorder)
+    release?.()
+    release?.() // a second release is a no-op
+    ctx.emit('session/event', session, event('turn/start', 1, { turn: 2 }))
+    await recorder.flush()
+    expect(recorder.length).toBe(0)
+  })
+
   it('disposing the mounting context stops capture', async () => {
     const root = await scratch()
     const recorder = recorderAt(root)
     const ctx = new Context()
-    const fiber = ctx.plugin({ apply: (inner: Context) => { apply(inner, { recorder }) } })
+    const fiber = ctx.plugin({ apply: (inner: Context) => { apply(inner) } })
     await fiber
+    captureOf(ctx)?.bind(recorder)
     await ctx.fiber.dispose()
     ctx.emit('session/event', session, event('turn/start', 0, { turn: 1 }))
     await recorder.flush()

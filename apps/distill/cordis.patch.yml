@@ -1,0 +1,44 @@
+# The distillation overlay.
+#
+# It layers over the `distill` profile, which is the shipped base bundle, so the
+# application composes through the same Loader every shipped application uses.
+# This file owns only what distillation adds or removes.
+
+# The single-teacher lock runs at load: a composition that cannot be pinned to
+# one teacher fails before the run records anything. The base bundle already
+# selects `deepseek-flash`, which is the teacher the lock requires.
+- insert:
+    - id: distill-teacher-lock
+      name: '@deepseek-ai/dsh-distill-teacher-lock'
+
+# A recorded attempt must show the teacher solving the task in its own workspace.
+# Anything that delegates the work, reaches the network, or runs a background
+# side channel is off, so the trajectory is the teacher's own activity.
+- id: tool-web
+  disabled: true
+- id: web
+  disabled: true
+- id: web-search-deepseek
+  disabled: true
+- id: web-fetch-http
+  disabled: true
+- id: subagent
+  disabled: true
+- id: subagent-spawn-in-process
+  disabled: true
+- id: subagent-fork-in-process
+  disabled: true
+- id: tool-subagent-control
+  disabled: true
+- id: tool-subagent-list-agents
+  disabled: true
+- id: tool-subagent
+  disabled: true
+- id: tool-subagent-fork
+  disabled: true
+- id: workflow-ptc
+  disabled: true
+- id: tool-workflow
+  disabled: true
+- id: tool-ralph
+  disabled: true

@@ -4,12 +4,15 @@
  * A finished task becomes one directory under the status its evaluator assigned,
  * written through a staging directory so a reader never observes a partial
  * dataset. An index line records where the task landed, which is what makes a
- * `task_id` traceable across the corpus without scanning every directory.
+ * `task_id` traceable across the corpus without scanning every directory. An
+ * attempt that did not become the task's selected success is archived in its own
+ * directory under `failed/<task_id>/`, so a task that succeeded on a later
+ * attempt still carries the record of its earlier ones.
  *
  * @module @deepseek-ai/dsh-distill/dataset
  */
 
-import { mkdir, readFile, rm } from 'node:fs/promises'
+import { mkdir, readdir, readFile, rm, rmdir } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { writeFileAtomic, withFileLock } from '@deepseek-ai/dsh-atomic-write'
@@ -22,6 +25,39 @@ export type DatasetBucket =
   | 'abandoned'
   | 'invalid/unknown'
   | 'invalid/infrastructure-error'
+
+/** Every bucket a task document can be written to. */
+const STATUS_BUCKETS: readonly DatasetBucket[] = [
+  'success',
+  'failed',
+  'abandoned',
+  'invalid/unknown',
+  'invalid/infrastructure-error',
+]
+
+/** The bucket holding one directory per attempt that did not become the selected success. */
+const FAILED_BUCKET: DatasetBucket = 'failed'
+
+/** The document's file name inside a task directory and inside an attempt directory. */
+const TRAJECTORY_FILE = 'trajectory.json'
+
+/**
+ * Render one dataset document the way every writer stores it.
+ * @param document - the document to serialize.
+ * @returns the pretty-printed JSON with one trailing newline.
+ */
+function renderDocument(document: unknown): string {
+  return `${JSON.stringify(document, null, 2)}\n`
+}
+
+/**
+ * Express a path the way the dataset index and the task result record it.
+ * @param path - a path built with `join`.
+ * @returns the same path with `/` separators.
+ */
+function datasetPath(path: string): string {
+  return path.split('\\').join('/')
+}
 
 /** One line of the dataset index. */
 export interface DatasetIndexEntry {
@@ -106,12 +142,43 @@ export class DatasetWriter {
     // then removed, which is what keeps a task in exactly one status directory
     // without depending on directory-rename semantics that differ per platform.
     await mkdir(dirname(destination), { recursive: true })
-    await writeFileAtomic(join(destination, 'trajectory.json'), `${JSON.stringify(document, null, 2)}\n`, { mode: 0o644 })
-    for (const other of ['success', 'failed', 'abandoned', 'invalid/unknown', 'invalid/infrastructure-error']) {
+    await writeFileAtomic(join(destination, TRAJECTORY_FILE), renderDocument(document), { mode: 0o644 })
+    for (const other of STATUS_BUCKETS) {
       if (other === bucket) continue
-      await rm(join(this.root, other, taskId), { recursive: true, force: true })
+      const stale = join(this.root, other, taskId)
+      // Only the task's own document moves between buckets. An attempt archive
+      // under `failed/<taskId>/` is the record of how the task reached its
+      // status, so the directory survives it and is removed only once nothing
+      // else is left in it.
+      await rm(join(stale, TRAJECTORY_FILE), { force: true })
+      if (existsSync(stale) && (await readdir(stale)).length === 0) {
+        await rmdir(stale)
+      }
     }
-    return relative.split('\\').join('/')
+    return datasetPath(relative)
+  }
+
+  /**
+   * Write one attempt's trajectory into the archive of attempts that did not
+   * become the task's selected success.
+   *
+   * The document is rendered and committed exactly like the task document, so an
+   * attempt directory holds either its complete trajectory or nothing. The
+   * archive sits beside the task's own document under `failed/<taskId>/`, which
+   * is where a task that succeeded on a later attempt keeps the evidence of what
+   * its earlier attempts did.
+   *
+   * @param taskId - the task's identity.
+   * @param attemptId - the attempt's identity, as `attempt_001`.
+   * @param document - the complete trajectory document of that one attempt.
+   * @returns the attempt's directory, relative to the root.
+   */
+  async writeAttempt(taskId: string, attemptId: string, document: unknown): Promise<string> {
+    const relative = join(FAILED_BUCKET, taskId, attemptId)
+    const destination = join(this.root, relative)
+    await mkdir(dirname(destination), { recursive: true })
+    await writeFileAtomic(join(destination, TRAJECTORY_FILE), renderDocument(document), { mode: 0o644 })
+    return datasetPath(relative)
   }
 
   /**

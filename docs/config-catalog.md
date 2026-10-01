@@ -823,6 +823,32 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-deepseek-account-platform -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-distill-teacher-lock -->
+<a id="deepseek-aidsh-distill-teacher-lock"></a>
+
+## `@deepseek-ai/dsh-distill-teacher-lock`
+
+- `source`: [`packages/distill/teacher-lock/src/index.ts:30`](../packages/distill/teacher-lock/src/index.ts)
+
+```ts config-catalog
+/** Plugin configuration. */
+export interface Config {
+  /**
+   * Model ids this composition accepts. Omission uses the built-in teacher set
+   * ({@link REQUIRED_TEACHER_MODEL} plus the retired aliases). A composition that
+   * needs a different teacher overrides this deliberately.
+   */
+  allow?: string[]
+  /**
+   * The composition's own model, consulted only when the launch environment names
+   * none. The running adapter's selection remains the authority; this field is the
+   * lock's record of what the composition intends to load.
+   */
+  model?: string
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-distill-teacher-lock -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-experimental-agent-team -->
 <a id="deepseek-aidsh-experimental-agent-team"></a>
 
@@ -4394,6 +4420,7 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 | `@deepseek-ai/dsh-config-editor` | `loader` · `profileContext` | [`packages/boot/config-editor/src/index.ts`](../packages/boot/config-editor/src/index.ts) |
 | `@deepseek-ai/dsh-cordis-client-runner` | — | [`packages/extensions/cordis-client-runner/src/index.ts`](../packages/extensions/cordis-client-runner/src/index.ts) |
 | `@deepseek-ai/dsh-deepseek-llm-api-extensions` | — | [`packages/llm/deepseek-llm-api-extensions/src/index.ts`](../packages/llm/deepseek-llm-api-extensions/src/index.ts) |
+| `@deepseek-ai/dsh-distill-trajectory-events` | — | [`packages/distill/trajectory-events/src/index.ts`](../packages/distill/trajectory-events/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-auto-review` | `approval` · `llm` · `permissionPresets` · `sessions` · `tools` | [`packages/experimental/auto-review/src/index.ts`](../packages/experimental/auto-review/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-client-ui-agent-team` | — | [`packages/experimental/client-ui-agent-team/src/index.ts`](../packages/experimental/client-ui-agent-team/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-client-ui-voice-input` | — | [`packages/experimental/client-ui-voice-input/src/index.ts`](../packages/experimental/client-ui-voice-input/src/index.ts) |
@@ -4475,6 +4502,9 @@ Imported as libraries by other packages; a `cordis.yml` cannot load them.
 | `@deepseek-ai/dsh-client-web` | — | [`packages/client/web/src/index.ts`](../packages/client/web/src/index.ts) |
 | `@deepseek-ai/dsh-cmdline` | — | [`packages/boot/cmdline/src/index.ts`](../packages/boot/cmdline/src/index.ts) |
 | `@deepseek-ai/dsh-deque` | — | [`packages/util/deque/src/index.ts`](../packages/util/deque/src/index.ts) |
+| `@deepseek-ai/dsh-distill` | — | [`packages/distill/distill/src/index.ts`](../packages/distill/distill/src/index.ts) |
+| `@deepseek-ai/dsh-distill-redaction` | — | [`packages/distill/redaction/src/index.ts`](../packages/distill/redaction/src/index.ts) |
+| `@deepseek-ai/dsh-distill-resource` | — | [`packages/distill/resource/src/index.ts`](../packages/distill/resource/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-agent-team-profile` | — | [`packages/experimental/agent-team-profile/src/index.ts`](../packages/experimental/agent-team-profile/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-browser-use-runtime` | — | [`packages/experimental/browser-use-runtime/src/index.ts`](../packages/experimental/browser-use-runtime/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-schedule-bundle` | — | [`packages/experimental/schedule-bundle/src/index.ts`](../packages/experimental/schedule-bundle/src/index.ts) |

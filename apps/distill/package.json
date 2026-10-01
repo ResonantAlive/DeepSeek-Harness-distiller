@@ -1,16 +1,26 @@
 {
   "name": "@deepseek-ai/dsh-distill-app",
-  "description": "The standalone distillation runner entry point: load task definitions, execute attempts, and write the labelled dataset",
+  "description": "The distillation application: boot the distill profile through the Loader, drive a real agent per attempt, and write the labelled dataset",
   "version": "0.2.0-rc.2",
   "private": true,
   "type": "module",
   "license": "MIT",
   "dependencies": {
+    "@deepseek-ai/dsh-app-boot": "workspace:*",
     "@deepseek-ai/dsh-distill": "workspace:*",
-    "@deepseek-ai/dsh-distill-redaction": "workspace:*"
+    "@deepseek-ai/dsh-distill-redaction": "workspace:*",
+    "@deepseek-ai/dsh-distill-resource": "workspace:*",
+    "@deepseek-ai/dsh-distill-teacher-lock": "workspace:*",
+    "@deepseek-ai/dsh-distill-trajectory-events": "workspace:*",
+    "@deepseek-ai/dsh-llm": "workspace:*"
   },
   "devDependencies": {
+    "@deepseek-ai/dsh-app-boot": "workspace:*",
     "@deepseek-ai/dsh-distill": "workspace:*",
-    "@deepseek-ai/dsh-distill-redaction": "workspace:*"
+    "@deepseek-ai/dsh-distill-redaction": "workspace:*",
+    "@deepseek-ai/dsh-distill-resource": "workspace:*",
+    "@deepseek-ai/dsh-distill-teacher-lock": "workspace:*",
+    "@deepseek-ai/dsh-distill-trajectory-events": "workspace:*",
+    "@deepseek-ai/dsh-llm": "workspace:*"
   }
 }

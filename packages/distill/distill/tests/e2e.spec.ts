@@ -201,6 +201,54 @@ describe('runTask end to end', () => {
     expect(result.abandonReason).toContain('5')
     expect(result.datasetDir).toBe('abandoned/T-E2E')
     expect((await dataset.completed('T-E2E'))?.status).toBe('ABANDONED')
+    // Nothing was selected, so every attempt is archived, and the task's own
+    // document stays the only one that is not.
+    for (const attempt of result.attempts) {
+      const archived = JSON.parse(await readFile(
+        join(root, 'dataset', 'failed', 'T-E2E', attempt.attempt_id, 'trajectory.json'), 'utf8',
+      )) as { attempt_id: string; status: string }
+      expect(archived.attempt_id).toBe(attempt.attempt_id)
+      expect(archived.status).toBe('FAILED')
+    }
+    await expect(readFile(join(root, 'dataset', 'failed', 'T-E2E', 'trajectory.json'), 'utf8')).rejects.toThrow()
+    expect(JSON.parse(await readFile(join(root, 'dataset', 'abandoned', 'T-E2E', 'trajectory.json'), 'utf8')))
+      .toMatchObject({ status: 'ABANDONED', attempt_summary: { total: 5, selected_attempt_id: null } })
+  })
+
+  it('archives the failed attempt of a task that succeeds on a later attempt', async () => {
+    const root = await scratch()
+    const templates = join(root, 'templates')
+    await mkdir(join(templates, 'basic'), { recursive: true })
+    const dataset = new DatasetWriter({ root: join(root, 'dataset') })
+    const teacher = new ScriptedTeacher([
+      async () => ({ status: 'FAILED', reason: 'no marker' }),
+      async (context: AttemptContext) => { await writeMarker(context); return { status: 'SUCCESS' as const, reason: 'done' } },
+    ])
+    const result = await runTask({
+      task: taskFor({
+        evaluator: MARKER_EVALUATOR,
+      }),
+      defaults: { max_attempts: 5 },
+      templatesRoot: templates,
+      evaluatorRoot: join(root, 'evaluator'),
+      runsRoot: join(root, 'runs'),
+      dataset,
+      expectedTeacherModel: 'deepseek-flash',
+      agent: teacher,
+    })
+    expect(result.status).toBe('SUCCESS')
+    expect(result.selectedAttemptId).toBe('attempt_002')
+    expect(result.datasetDir).toBe('success/T-E2E')
+    expect(JSON.parse(await readFile(join(root, 'dataset', 'success', 'T-E2E', 'trajectory.json'), 'utf8')))
+      .toMatchObject({ status: 'SUCCESS', attempt_summary: { total: 2, selected_attempt_id: 'attempt_002' } })
+    expect(JSON.parse(await readFile(
+      join(root, 'dataset', 'failed', 'T-E2E', 'attempt_001', 'trajectory.json'), 'utf8',
+    ))).toMatchObject({ attempt_id: 'attempt_001', status: 'FAILED' })
+    // The selected attempt is the task document's own record, so it is not archived twice.
+    await expect(readFile(join(root, 'dataset', 'failed', 'T-E2E', 'attempt_002', 'trajectory.json'), 'utf8'))
+      .rejects.toThrow()
+    // The task document lives in exactly one bucket.
+    await expect(readFile(join(root, 'dataset', 'failed', 'T-E2E', 'trajectory.json'), 'utf8')).rejects.toThrow()
   })
 
   it('does not call a model-declared success a success when the evaluator fails', async () => {

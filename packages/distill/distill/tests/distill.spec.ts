@@ -1,4 +1,5 @@
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -402,6 +403,33 @@ describe('DatasetWriter', () => {
     expect(JSON.parse(await readFile(join(root, 'success', 'T-1', 'trajectory.json'), 'utf8')))
       .toEqual({ generation: 2 })
     await expect(readFile(join(root, 'failed', 'T-1', 'trajectory.json'), 'utf8')).rejects.toThrow()
+    // The bucket it left held nothing else, so its task directory goes too.
+    expect(existsSync(join(root, 'failed', 'T-1'))).toBe(false)
+  })
+
+  it('archives one attempt under failed and returns its relative directory', async () => {
+    const root = await scratch()
+    const dataset = new DatasetWriter({ root })
+    const dir = await dataset.writeAttempt('T-1', 'attempt_001', { attempt_id: 'attempt_001' })
+    expect(dir).toBe('failed/T-1/attempt_001')
+    expect(JSON.parse(await readFile(join(root, 'failed', 'T-1', 'attempt_001', 'trajectory.json'), 'utf8')))
+      .toEqual({ attempt_id: 'attempt_001' })
+  })
+
+  it('keeps archived attempts when the task document lands in another bucket', async () => {
+    const root = await scratch()
+    const dataset = new DatasetWriter({ root })
+    await dataset.writeAttempt('T-1', 'attempt_001', { attempt_id: 'attempt_001' })
+    await dataset.writeAttempt('T-1', 'attempt_002', { attempt_id: 'attempt_002' })
+    // A task that never succeeded keeps its own document beside the archive.
+    await dataset.write('T-1', 'failed', { generation: 1 })
+    await dataset.write('T-1', 'success', { generation: 2 })
+    const buckets = ['success', 'failed', 'abandoned', 'invalid/unknown', 'invalid/infrastructure-error']
+    const holders = buckets.filter(bucket => existsSync(join(root, bucket, 'T-1', 'trajectory.json')))
+    // Exactly one bucket holds the task's own document; the archive is not one.
+    expect(holders).toEqual(['success'])
+    expect(existsSync(join(root, 'failed', 'T-1', 'attempt_001', 'trajectory.json'))).toBe(true)
+    expect(existsSync(join(root, 'failed', 'T-1', 'attempt_002', 'trajectory.json'))).toBe(true)
   })
 
   it('appends index lines and reads them back', async () => {

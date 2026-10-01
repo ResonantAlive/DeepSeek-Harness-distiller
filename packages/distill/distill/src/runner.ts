@@ -390,6 +390,13 @@ export async function runTask(options: RunTaskOptions): Promise<TaskResult> {
   }
   const bucket = bucketFor(status, errorClass)
   const datasetDir = await dataset.write(task.task_id, bucket, document)
+  // Every attempt that did not become the selected success is archived in its
+  // own directory, so a task that succeeded on a later attempt keeps the record
+  // of what its earlier attempts did instead of dropping them.
+  for (const attempt of trajectories) {
+    if (attempt.attempt_id === selectedAttemptId) continue
+    await dataset.writeAttempt(task.task_id, attempt.attempt_id, attempt)
+  }
   await dataset.index({
     task_id: task.task_id,
     status,

@@ -309,23 +309,85 @@ export function createRecorder(options: TrajectoryRecorderOptions): TrajectoryRe
 }
 
 /**
- * Mount the capture plugin for one attempt.
+ * Routes the live session and stream events of one run to the attempt that is
+ * currently bound.
  *
- * The plugin subscribes at the root context, so it observes every session in the
- * process; a distillation attempt runs one session, and the recorder stamps its
- * own task and attempt identity on each event.
- *
- * @param ctx - the context that owns the subscriptions.
- * @param config - the attempt's recorder and the session it captures.
+ * The plugin subscribes once, at mount, because a subscription per attempt would
+ * accumulate for the life of the process. An attempt binds its own recorder for
+ * exactly its own lifetime, so events never cross between attempts. The plugin
+ * needs no configuration: an attempt's recorder already owns its destination and
+ * its redaction rules.
  */
-export function apply(ctx: Context, config: ApplyConfig): void {
-  const { recorder } = config
-  ctx.on('session/event', (session, event) => { recorder.record(session, event) })
-  ctx.on('agent/assistant-stream', ({ frame }) => { recorder.recordStreamFrame(frame) })
+export class TrajectoryCapture {
+  private active: TrajectoryRecorder | undefined
+
+  /** The bound recorder, or `undefined` between attempts. */
+  get current(): TrajectoryRecorder | undefined {
+    return this.active
+  }
+
+  /**
+   * Route this run's events to one attempt's recorder until released.
+   * @param recorder - the attempt's recorder.
+   * @returns a function that unbinds; a second call is a no-op.
+   */
+  bind(recorder: TrajectoryRecorder): () => void {
+    this.active = recorder
+    let bound = true
+    return () => {
+      if (!bound) return
+      bound = false
+      if (this.active === recorder) this.active = undefined
+    }
+  }
+
+  /**
+   * Record one committed session event against the bound attempt.
+   * @param session - the session that committed it.
+   * @param event - the committed event.
+   */
+  record(session: Session, event: SessionEvent): void {
+    this.active?.record(session, event)
+  }
+
+  /**
+   * Record one live assistant stream frame against the bound attempt.
+   * @param frame - the stream frame the adapter produced.
+   */
+  recordStreamFrame(frame: AssistantStreamFrame): void {
+    this.active?.recordStreamFrame(frame)
+  }
 }
 
-/** Configuration for {@link apply}. */
-export interface ApplyConfig {
-  /** The attempt's recorder. */
-  readonly recorder: TrajectoryRecorder
+/**
+ * Mount the capture plugin for one run.
+ *
+ * The capture is published as the `distillCapture` service, which is how the
+ * attempt runner binds each attempt's recorder. A run that mounts this plugin
+ * without binding an attempt records nothing, which is the state between
+ * attempts rather than an error.
+ *
+ * @param ctx - the context that owns the subscriptions.
+ */
+export function apply(ctx: Context): void {
+  const capture = new TrajectoryCapture()
+  ctx.provide('distillCapture', capture)
+  ctx.on('session/event', (session, event) => { capture.record(session, event) })
+  ctx.on('agent/assistant-stream', ({ frame }) => { capture.recordStreamFrame(frame) })
+}
+
+/**
+ * Read the capture a mounted plugin published.
+ * @param ctx - the context the plugin was mounted on.
+ * @returns the capture, or `undefined` when the plugin is not mounted.
+ */
+export function captureOf(ctx: Context): TrajectoryCapture | undefined {
+  return ctx.get('distillCapture')
+}
+
+declare module '@deepseek-ai/cordis' {
+  interface Context {
+    /** The trajectory capture, published by {@link apply}. */
+    distillCapture: TrajectoryCapture
+  }
 }
