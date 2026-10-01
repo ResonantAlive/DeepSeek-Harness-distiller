@@ -7,11 +7,9 @@ kind: "package-reference"
 
 ## Summary
 
-Use `dsh-distill-trajectory-events` to record what an agent actually did while it worked, rather than reconstructing it from prose afterwards. A `TrajectoryRecorder` subscribes to the session log and the live assistant stream and writes a structured raw event for every activity: turn and step boundaries, each model decision with its tool calls, every tool result, the adapters' request configuration, and the streamed reasoning and text deltas.
+Use `dsh-distill-trajectory-events` to record what an agent did while it worked, rather than reconstructing it from prose afterwards. A `TrajectoryRecorder` subscribes to the session log and the live assistant stream and writes a structured raw event for every activity: turn and step boundaries, each model decision with its tool calls, every tool result, the request configuration, and streamed reasoning and text deltas.
 
-Every payload is redacted before it reaches disk, and a field too large to inline is replaced by a content-addressed blob reference plus a bounded preview. Redaction runs first, so a blob can never hold a secret the inline form would have hidden.
-
-Capture is live and ordered: each committed session event is queued as it happens, appends serialize in commit order, and `flush()` drains the queue so an attempt can prove its log is complete before it ends.
+Payloads are redacted before disk, and an oversized field becomes a content-addressed blob reference plus a bounded preview. Appends serialize in commit order and `flush()` drains the queue, so an attempt can prove its log is complete.
 
 ## Table of Contents
 

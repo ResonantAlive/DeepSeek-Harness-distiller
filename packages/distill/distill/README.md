@@ -7,9 +7,9 @@ kind: "package-reference"
 
 ## Summary
 
-Use `dsh-distill` to turn a corpus of tasks into a labelled agent dataset. It loads task definitions, prepares a fresh workspace for each attempt, runs the attempt through a caller-supplied agent, records the trajectory while the agent works, judges the result with commands the task declares, and writes the outcome under a status directory with a shared index.
+Use `dsh-distill` to turn a corpus of tasks into a labelled agent dataset: it loads task definitions, prepares a fresh workspace per attempt, runs the attempt through a caller-supplied agent, records the trajectory while it works, judges the result with commands the task declares, and writes the outcome under a status directory with a shared index.
 
-Nothing here trusts the model's own report. A task succeeds only when its evaluator exits with the expected code and every declared check passes; an attempt whose hidden test was modified is flagged and kept out of the success bucket even when its evaluator passed.
+Nothing trusts the model's own report. A task succeeds only when its evaluator exits with the expected code and every declared check passes, and a tampered attempt never enters the success bucket.
 
 ## Table of Contents
 

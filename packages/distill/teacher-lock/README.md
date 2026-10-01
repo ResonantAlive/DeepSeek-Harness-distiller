@@ -7,9 +7,9 @@ kind: "package-reference"
 
 ## Summary
 
-Every trajectory a distillation run produces must come from one teacher model, and a composition that cannot be pinned to one must fail before it records anything. `dsh-distill-teacher-lock` resolves that one model when the composition loads and refuses the run when it cannot: no candidate model at all, two layers naming different models, or a chosen model outside the allowlist. It also refuses an allowlist that tries to accept any model, because a lock that accepts everything is not a lock.
+Every trajectory a distillation run produces must come from one teacher model, and a composition that cannot be pinned to one must fail before it records anything. `dsh-distill-teacher-lock` resolves that model when the composition loads and refuses the run when it cannot: no candidate at all, two layers naming different models, or a model outside the allowlist. It also refuses an allowlist that accepts any model, because a lock that accepts everything is not a lock.
 
-The judgment is a pure function (`resolveTeacherLock` in `./lock`), so it is testable without a running composition; the plugin only reads the candidate layers and calls it.
+The judgment is a pure function (`resolveTeacherLock` in `./lock`); the plugin only reads the candidate layers and calls it.
 
 ## Table of Contents
 

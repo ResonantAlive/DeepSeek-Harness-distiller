@@ -112,7 +112,11 @@ export interface TaskResult {
   readonly abandonReason?: string
 }
 
-/** Zero-padded attempt identity. */
+/**
+ * Zero-padded attempt identity.
+ * @param ordinal - the zero-based attempt index.
+ * @returns the identity, as `attempt_001` for the first attempt.
+ */
 export function attemptIdFor(ordinal: number): string {
   return `attempt_${String(ordinal + 1).padStart(3, '0')}`
 }

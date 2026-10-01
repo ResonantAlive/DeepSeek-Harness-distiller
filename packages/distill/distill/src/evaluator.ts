@@ -146,9 +146,9 @@ export async function fingerprintDirectory(root: string): Promise<Record<string,
 }
 
 /**
- * Compare a directory against a fingerprint taken earlier.
- * @param root - the directory now.
- * @param before - the fingerprint taken at attempt start.
+ * Compare two fingerprints of the same tree.
+ * @param before - the fingerprint taken earlier.
+ * @param after - the fingerprint taken later.
  * @returns the paths added, changed, and removed, each sorted.
  */
 export function diffFingerprints(
@@ -192,10 +192,8 @@ export function looksLikeTestPath(path: string): boolean {
  * hidden suite. Creating ordinary output files is the task's goal, not tampering,
  * so it is not reported.
  *
- * @param before - evaluator-asset fingerprint at attempt start.
- * @param after - evaluator-asset fingerprint at attempt end.
- * @param scaffoldBefore - scaffold fingerprint at attempt start.
- * @param scaffoldAfter - scaffold fingerprint at attempt end.
+ * @param input - the four fingerprints: evaluator assets and scaffold, each
+ * taken before and after the attempt.
  * @returns the flags raised, deduplicated and sorted.
  */
 export function integrityFlags(input: {

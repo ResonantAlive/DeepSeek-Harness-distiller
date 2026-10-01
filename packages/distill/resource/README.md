@@ -7,9 +7,9 @@ kind: "package-reference"
 
 ## Summary
 
-Use `dsh-distill-resource` to decide how many tasks a distillation run may execute at once and how much of the host each one may claim. It reads the CPU and memory the host actually allows — the cgroup controller's limit when a container imposes one, the operating system's figure otherwise — validates a batch partitioning against that budget before the run starts, and admits tasks through a gate that keeps a claim from eating the reserve.
+Use `dsh-distill-resource` to decide how many tasks a distillation run may execute at once and how much of the host each may claim. It reads the CPU and memory the host actually allows — the cgroup limit when a container imposes one, the operating system's figure otherwise — validates a batch partitioning against that budget before the run starts, and admits tasks through a gate that keeps a claim from eating the reserve.
 
-The point is the timing. A plan that over-allocates is rejected with the arithmetic that failed, at startup, instead of dying mid-attempt when the kernel reaches for memory that was never there.
+A plan that over-allocates is rejected with the arithmetic that failed, at startup, instead of dying mid-attempt when the kernel reaches for memory that was never there.
 
 ## Table of Contents
 

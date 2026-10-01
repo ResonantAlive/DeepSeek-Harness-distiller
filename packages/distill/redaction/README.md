@@ -7,9 +7,9 @@ kind: "package-reference"
 
 ## Summary
 
-Use `dsh-distill-redaction` to remove secrets from anything a distillation run is about to persist. A redactor hides the caller's own secret values (the *keyring*) and the well-known credential shapes — PEM private keys, `Bearer` credentials, `Authorization` values, `sk-` keys, and `api_key`-style assignments — replacing each hit with a typed placeholder such as `[REDACTED:API_KEY]`. `redactValue` applies the same redaction to every string nested in a JSON value, which is the form raw events, trajectories, and archived session logs take before they reach disk.
+Use `dsh-distill-redaction` to remove secrets from anything a distillation run is about to persist. A redactor hides the caller's own values (the *keyring*) and the well-known credential shapes — PEM private keys, `Bearer` and `Authorization` values, `sk-` keys, and `api_key` assignments — replacing each hit with a typed placeholder such as `[REDACTED:API_KEY]`. `redactValue` redacts every string nested in a JSON value, the form trajectories and archived logs take before disk.
 
-Redaction is one pass per string and never rescans a replacement, so a placeholder cannot be re-redacted and repeated application is idempotent. This is a zero-dependency library: it provides no `cordis.yml` plugin and performs no I/O.
+Redaction is one pass per string and never rescans a replacement, so repeated application is idempotent. It is a zero-dependency library: no plugin, no I/O.
 
 ## Table of Contents
 

@@ -147,7 +147,12 @@ export function validate(input: ResourcePlanInput): ValidationResult {
   return { errors, warnings }
 }
 
-/** Raised at startup when a partitioning does not hold. */
+/**
+ * Raise when a partitioning does not hold.
+ * @param input - the batches, the reserve, and the detected host.
+ * @returns nothing; an over-allocated partitioning throws instead.
+ * @throws ResourceAllocationError when the plan does not fit the host.
+ */
 export function assertPlanHolds(input: ResourcePlanInput): void {
   const result = validate(input)
   if (result.errors.length === 0) return
@@ -336,7 +341,11 @@ export function createTaskAdmissionGate(options: TaskAdmissionGateOptions): Admi
   }
 }
 
-/** Every batch a plan declares, for a caller that needs the raw list. */
+/**
+ * Every batch a plan declares, for a caller that needs the raw list.
+ * @param plan - the validated partitioning.
+ * @returns the batches, in assignment order.
+ */
 export function batchesOf(plan: ResourcePlan): readonly BatchSpec[] {
   return plan.batches
 }
