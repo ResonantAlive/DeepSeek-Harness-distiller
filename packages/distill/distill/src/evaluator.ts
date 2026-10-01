@@ -26,6 +26,14 @@ export interface CommandOutcome {
   readonly stderr: string
   /** Whether the deadline was reached. */
   readonly timedOut: boolean
+  /**
+   * Why the command never ran, or `null` when it did.
+   *
+   * A command that could not start measured nothing, which is a fact about the
+   * harness rather than about the work. `exitCode` cannot carry it: a command
+   * killed by a signal also reports `null`, so the two are told apart here.
+   */
+  readonly spawn_error: string | null
   /** Wall-clock duration in milliseconds. */
   readonly duration_ms: number
 }
@@ -58,11 +66,11 @@ export async function runCommand(
     }, options.timeoutMs)
     child.on('error', (error) => {
       clearTimeout(timer)
-      settle({ exitCode: null, stdout, stderr: `${stderr}${error.message}`, timedOut, duration_ms: Date.now() - started })
+      settle({ exitCode: null, stdout, stderr: `${stderr}${error.message}`, timedOut, spawn_error: error.message, duration_ms: Date.now() - started })
     })
     child.on('close', (code) => {
       clearTimeout(timer)
-      settle({ exitCode: code, stdout, stderr, timedOut, duration_ms: Date.now() - started })
+      settle({ exitCode: code, stdout, stderr, timedOut, spawn_error: null, duration_ms: Date.now() - started })
     })
   })
 }
@@ -251,7 +259,7 @@ async function runChecks(
       cwd: layout.workspace,
       timeoutMs: check.timeout_ms ?? DEFAULT_COMMAND_TIMEOUT_MS,
     })
-    const started = outcome.exitCode !== null
+    const started = outcome.spawn_error === null
     outcomes.push({
       name: `command_succeeds:${(check.command as readonly string[]).join(' ')}`,
       // A command that never started measured nothing, so it is an infrastructure
@@ -287,7 +295,9 @@ export async function evaluate(spec: EvaluatorSpec, layout: AttemptLayout): Prom
   })
   const entries: CheckOutcome[] = [{
     name: `evaluator:${spec.command.join(' ')}`,
-    status: outcome.timedOut ? 'error' : outcome.exitCode === expected ? 'passed' : 'failed',
+    // A command that never started measured nothing, so it is an infrastructure
+    // failure rather than a failed check.
+    status: outcome.spawn_error !== null || outcome.timedOut ? 'error' : outcome.exitCode === expected ? 'passed' : 'failed',
     exit_code: outcome.exitCode,
     duration_ms: outcome.duration_ms,
     stdout: outcome.stdout,
@@ -295,6 +305,14 @@ export async function evaluate(spec: EvaluatorSpec, layout: AttemptLayout): Prom
   }]
   const primary = entries[0] as CheckOutcome
   if (primary.status === 'error') {
+    if (outcome.spawn_error !== null) {
+      return {
+        status: 'ERROR',
+        reason: `evaluator could not start: ${outcome.spawn_error}`,
+        error_class: 'infrastructure',
+        entries,
+      }
+    }
     return {
       status: 'TIMEOUT',
       reason: `evaluator did not complete: ${primary.stderr.trim() || `exit ${String(outcome.exitCode)}`}`,

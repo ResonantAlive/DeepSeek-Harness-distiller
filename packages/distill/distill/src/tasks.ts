@@ -292,6 +292,9 @@ export async function loadTasks(manifestPath: string): Promise<{
   if (manifest.version !== 1) {
     throw new TaskDefinitionError(manifestPath, `"version" must be 1; got ${JSON.stringify(manifest.version)}`)
   }
+  // The manifest's own fields are validated before the files it names are read,
+  // so a bad limit is reported as itself rather than behind a task's problem.
+  const defaults = defaultsOf(manifestPath, manifest.defaults)
   const entries = manifest.tasks
   if (!Array.isArray(entries) || entries.length === 0) {
     throw new TaskDefinitionError(manifestPath, '"tasks" must be a non-empty array')
@@ -313,7 +316,6 @@ export async function loadTasks(manifestPath: string): Promise<{
     seen.add(task.task_id)
     tasks.push(task)
   }
-  const defaults = defaultsOf(manifestPath, manifest.defaults)
   return { root, defaults, tasks }
 }
 

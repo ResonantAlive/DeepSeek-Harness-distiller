@@ -281,8 +281,16 @@ export function promptFor(
   return parts.join('\n\n')
 }
 
-/** Read the `<task>/<attempt>` raw events back from disk. */
-async function readEvents(path: string): Promise<RawEvent[]> {
+/**
+ * Read the `<task>/<attempt>` raw events back from disk.
+ *
+ * A missing log reads as no events rather than as an error: an attempt that
+ * never wrote one recorded nothing, which is a fact about the attempt.
+ *
+ * @param path - the attempt's `events.jsonl`.
+ * @returns the events in commit order, or an empty list when there is no log.
+ */
+export async function readEvents(path: string): Promise<RawEvent[]> {
   const { readFile } = await import('node:fs/promises')
   const { existsSync } = await import('node:fs')
   if (!existsSync(path)) return []
@@ -458,7 +466,12 @@ export async function runTask(options: RunTaskOptions): Promise<TaskResult> {
     const breach = budgetBreach(inspected, events, context.limits)
     const attemptStatus: Status = breach !== undefined
       ? 'FAILED'
-      : evaluation?.status ?? outcome.status
+      // An evaluator that could not run measured nothing about the attempt, so
+      // the attempt is unknown rather than failed: the model is not answerable
+      // for a judgment that never happened.
+      : evaluation?.error_class === 'infrastructure'
+        ? 'UNKNOWN'
+        : evaluation?.status ?? outcome.status
     await recorder.append('attempt_end', {
       status: attemptStatus,
       reason: breach ?? evaluation?.reason ?? outcome.reason,
@@ -492,8 +505,8 @@ export async function runTask(options: RunTaskOptions): Promise<TaskResult> {
       continue
     }
     if (attemptStatus === 'UNKNOWN') {
-      // Without a usable evaluator nothing objective was measured, so retrying
-      // would not produce a judgment either.
+      // Nothing objective was measured, so retrying would not produce a
+      // judgment either.
       status = 'UNKNOWN'
       break
     }

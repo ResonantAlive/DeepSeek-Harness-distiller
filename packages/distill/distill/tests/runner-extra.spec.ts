@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { DatasetWriter } from '../src/dataset.ts'
-import { discardAttempt, attemptLimits, budgetBreach, promptFor, repeatedAction, runTask, totalTokens } from '../src/runner.ts'
+import { discardAttempt, attemptLimits, budgetBreach, promptFor, readEvents, repeatedAction, runTask, totalTokens } from '../src/runner.ts'
 import type { AgentRunner, AttemptContext } from '../src/runner.ts'
 import { buildTrajectory, textOf } from '../src/trajectory.ts'
 import { parseRunnerArgs } from '../../../../apps/distill/src/bin.ts'
@@ -428,6 +428,51 @@ describe('attempt budgets', () => {
     payload,
   })
 
+  it('treats a step with no actions as a break in a repeated run', () => {
+    const trajectory = buildTrajectory([
+      step('one'),
+      [{ event_type: 'assistant_message', payload: { step: 1, decision: { text: 'thinking', reasoning: null, reasoning_available: false, tool_calls: [] } } }],
+      step('two'),
+    ].flat().map(entry => event(entry.event_type, entry.payload)), options)
+    // The same call either side of a step that issued nothing is not a repeat.
+    expect(repeatedAction(trajectory, 2)).toBeUndefined()
+  })
+
+  it('reports a repeat through the whole budget check', () => {
+    const trajectory = buildTrajectory(
+      [step('one'), step('two')].flat().map(entry => event(entry.event_type, entry.payload)),
+      options,
+    )
+    expect(budgetBreach(trajectory, [], { repeat_action_limit: 2 }))
+      .toContain('repeated the same tool call 2 times')
+  })
+
+  it('reads a missing event log as no events rather than as an error', async () => {
+    const root = await scratch()
+    await expect(readEvents(join(root, 'absent', 'events.jsonl'))).resolves.toEqual([])
+  })
+
+  it('leaves a task UNKNOWN when the evaluator cannot run at all', async () => {
+    const root = await scratch()
+    const dataset = new DatasetWriter({ root: join(root, 'dataset') })
+    const result = await runTask({
+      task: task({
+        // A command that cannot start judges nothing, so no verdict exists.
+        evaluator: { kind: 'test_command', command: ['definitely-not-a-real-command-xyz'] },
+      }),
+      defaults: { max_attempts: 3 },
+      templatesRoot: await templatesAt(root),
+      evaluatorRoot: join(root, 'evaluator'),
+      runsRoot: join(root, 'runs'),
+      dataset,
+      agent: teacher(async (context) => {
+        await succeed(context)
+        return { status: 'SUCCESS', reason: 'the model claims it is done' }
+      }),
+    })
+    expect(result.status).toBe('UNKNOWN')
+    expect(result.datasetDir).toBe('invalid/unknown/T-X')
+  })
   it('surfaces the sampling temperature and the last failure', () => {
     const trajectory = buildTrajectory([
       event('task_start', { phase: 'request-header', config: { provider: 'p', model: 'm', temperature: 0.2 } }),

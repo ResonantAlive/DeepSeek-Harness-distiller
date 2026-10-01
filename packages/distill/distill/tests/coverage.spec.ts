@@ -157,6 +157,26 @@ describe('manifest validation refusals', () => {
     await expect(loadTasks(join(root, 'b.yml'))).rejects.toThrow(/file/)
   })
 
+  it('accepts a manifest that states no defaults', async () => {
+    const root = await scratch()
+    await writeFile(join(root, 'task.yml'), [
+      'version: 1',
+      'task_id: T-1',
+      'prompt: p',
+      'workspace: { template: t }',
+      'evaluator: { kind: test_command, command: ["true"] }',
+      '',
+    ].join('\n'), 'utf8')
+    await writeFile(join(root, 'm.yml'), 'version: 1\ntasks:\n  - file: task.yml\n', 'utf8')
+    const loaded = await loadTasks(join(root, 'm.yml'))
+    expect(loaded.defaults).toEqual({})
+  })
+
+  it('refuses defaults that are not a mapping', async () => {
+    const root = await scratch()
+    await writeFile(join(root, 'm.yml'), 'version: 1\ndefaults: nope\ntasks: []\n', 'utf8')
+    await expect(loadTasks(join(root, 'm.yml'))).rejects.toThrow(/"defaults" must be a mapping/)
+  })
   it('refuses a manifest that is a scalar', async () => {
     const root = await scratch()
     await writeFile(join(root, 'c.yml'), 'just a string\n', 'utf8')
@@ -231,6 +251,29 @@ describe('trajectory edge cases', () => {
     expect(trajectory.trajectory[0]?.observations[0]?.terminal).toBeUndefined()
   })
 
+  it('reads the model the provider reported serving the request', () => {
+    const trajectory = buildTrajectory([
+      event('task_start', { phase: 'response-header', model: 'deepseek-flash-2026' }),
+    ], options)
+    expect(trajectory.teacher.served_model).toBe('deepseek-flash-2026')
+    // An empty or absent name states nothing rather than naming an empty model.
+    expect(buildTrajectory([event('task_start', { phase: 'response-header', model: '' })], options)
+      .teacher.served_model).toBeNull()
+  })
+
+  it('lists a modified file apart from the ones created and deleted', () => {
+    const trajectory = buildTrajectory([], {
+      ...options,
+      fileChanges: [
+        { path: 'kept.txt', change: 'modified' },
+        { path: 'new.txt', change: 'created' },
+        { path: 'gone.txt', change: 'deleted' },
+      ],
+    })
+    expect(trajectory.artifacts.files_modified).toEqual(['kept.txt'])
+    expect(trajectory.artifacts.files_created).toEqual(['new.txt'])
+    expect(trajectory.artifacts.files_deleted).toEqual(['gone.txt'])
+  })
   it('ignores a request header without a config', () => {
     const trajectory = buildTrajectory([event('task_start', { phase: 'request-header' })], options)
     expect(trajectory.teacher.model).toBe('unknown')
