@@ -72,6 +72,73 @@ async function corpus(): Promise<{ manifest: string; out: string }> {
   return { manifest, out: join(root, 'dataset') }
 }
 
+/**
+ * Two tasks that must not succeed, each for a different reason: one whose
+ * evaluator can never pass, and one that spends its step budget before it can
+ * finish. Both belong in the same failed bucket, and both must keep every
+ * attempt they made rather than only the last.
+ *
+ * @returns the manifest and the dataset root they write to.
+ */
+async function failingCorpus(): Promise<{ manifest: string; out: string }> {
+  const root = await scratch()
+  const templates = join(root, 'templates', 'basic')
+  await mkdir(templates, { recursive: true })
+  await writeFile(join(templates, 'README.md'), 'A scratch workspace.\n', 'utf8')
+  await mkdir(join(root, 'evaluator'), { recursive: true })
+  await mkdir(join(root, 'tasks'), { recursive: true })
+  await writeFile(join(root, 'tasks', 'T-FAIL.yml'), [
+    'version: 1',
+    'task_id: T-FAIL',
+    'prompt: |',
+    '  Say the single word: ready',
+    '  Then you are done. Do not explain.',
+    'workspace:',
+    '  template: basic',
+    'max_attempts: 2',
+    'evaluator:',
+    '  kind: test_command',
+    '  command:',
+    '    - node',
+    '    - -e',
+    // The check demands a file no prompt asked for, so the judgment can never
+    // pass and the task must exhaust both attempts.
+    `    - ${JSON.stringify("process.exit(require('node:fs').existsSync(require('node:path').join('..','workspace','never.txt'))?0:1)")}`,
+    '',
+  ].join('\n'), 'utf8')
+  await writeFile(join(root, 'tasks', 'T-BREACH.yml'), [
+    'version: 1',
+    'task_id: T-BREACH',
+    'prompt: |',
+    '  Say the single word: ready',
+    '  Then you are done. Do not explain.',
+    'workspace:',
+    '  template: basic',
+    // One token is less than any answer costs, so the budget ends the attempt
+    // whatever the model chooses to do; a step limit would only bind a model
+    // that happened to take more than that many steps.
+    'max_tokens_per_attempt: 1',
+    'evaluator:',
+    '  kind: test_command',
+    '  command:',
+    '    - node',
+    '    - -e',
+    `    - ${JSON.stringify('process.exit(0)')}`,
+    '',
+  ].join('\n'), 'utf8')
+  const manifest = join(root, 'tasks', 'manifest.yml')
+  await writeFile(manifest, [
+    'version: 1',
+    'defaults:',
+    '  max_attempts: 2',
+    'tasks:',
+    '  - file: T-FAIL.yml',
+    '  - file: T-BREACH.yml',
+    '',
+  ].join('\n'), 'utf8')
+  return { manifest, out: join(root, 'dataset') }
+}
+
 describeReal('a real attempt through the composed application', () => {
   it('boots the distill profile through the Loader and pins one teacher', async () => {
     const composition = await bootDistillComposition()
@@ -189,4 +256,52 @@ describeReal('a real attempt through the composed application', () => {
     // told apart by configuration alone.
     expect(attempt?.teacher.config_hash).toMatch(/^[0-9a-f]{64}$/)
   }, 600_000)
+
+  it('keeps a failed task and an over-budget task with every attempt they made', async () => {
+    const composition = await bootDistillComposition()
+    booted.push(composition)
+    const { manifest, out } = await failingCorpus()
+    const reports = await runAll(
+      { manifest, out },
+      createAgentRunner(composition.ctx, {
+        ...pinnedTeacher(composition.ctx),
+        capture: composition.capture,
+        attemptTimeoutMs: 240_000,
+      }),
+      { secrets: [], environment: { available_tools: availableToolsOf(composition.ctx) } },
+    )
+    const byId = new Map(reports.map(report => [report.taskId, report]))
+    // A judgment that can never pass and a budget that ends the attempt are two
+    // different failures, and neither is a success. Both exhaust their attempts,
+    // which is the abandoned outcome rather than the failed one: failed is
+    // reserved for an attempt that passed while raising an integrity flag.
+    expect(byId.get('T-FAIL')?.status).toBe('ABANDONED')
+    expect(byId.get('T-BREACH')?.status).toBe('ABANDONED')
+    expect(byId.get('T-FAIL')?.datasetDir).toBe('abandoned/T-FAIL')
+    expect(byId.get('T-BREACH')?.datasetDir).toBe('abandoned/T-BREACH')
+    // Neither may be mistaken for work that was never measured.
+    expect(byId.get('T-FAIL')?.integrityFlags).toEqual([])
+    expect(existsSync(join(out, 'success', 'T-FAIL'))).toBe(false)
+    expect(existsSync(join(out, 'success', 'T-BREACH'))).toBe(false)
+
+    // The failure did not cost the trajectory: each task kept its attempts, and
+    // each attempt carries the model that answered it.
+    for (const taskId of ['T-FAIL', 'T-BREACH']) {
+      const document = JSON.parse(
+        await readFile(join(out, 'abandoned', taskId, 'trajectory.json'), 'utf8'),
+      ) as {
+        attempt_summary: { total: number }
+        attempts: readonly { teacher: { served_model: string | null }; trajectory: readonly unknown[] }[]
+      }
+      expect(document.attempt_summary.total).toBe(2)
+      expect(document.attempts).toHaveLength(2)
+      expect(document.attempts.every(attempt => attempt.teacher.served_model !== null)).toBe(true)
+      // Every attempt is archived on its own under the failed bucket, whatever
+      // bucket the task itself landed in, so a task that failed twice keeps both
+      // records rather than only the last.
+      for (const attempt of ['attempt_001', 'attempt_002']) {
+        expect(existsSync(join(out, 'failed', taskId, attempt, 'trajectory.json'))).toBe(true)
+      }
+    }
+  }, 900_000)
 })
