@@ -15,6 +15,8 @@
 import { mkdir } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { DatasetWriter, rateLimitOf, RateLimitGate } from '@deepseek-ai/dsh-distill'
+import { assertPlanHolds, detectHostResources } from '@deepseek-ai/dsh-distill-resource'
+import type { HostResources, ResourcePlanInput } from '@deepseek-ai/dsh-distill-resource'
 import { loadTasks } from '@deepseek-ai/dsh-distill'
 import { runTask } from '@deepseek-ai/dsh-distill'
 import type { AgentRunner } from '@deepseek-ai/dsh-distill'
@@ -22,6 +24,9 @@ import { collectEnvironmentSecrets } from '@deepseek-ai/dsh-distill-redaction'
 import { availableToolsOf, bootDistillComposition, pinnedTeacher } from './composition.ts'
 import type {} from '@deepseek-ai/dsh-tools'
 import { createAgentRunner } from './agent-runner.ts'
+
+/** Mebibytes held back from the batches when the caller states none. */
+const DEFAULT_RESERVED_RAM_MB = 2048
 
 /** Parsed command line. */
 export interface RunnerArgs {
@@ -43,6 +48,46 @@ export interface RunnerArgs {
   readonly maxConcurrentTasks?: number
   /** Milliseconds to hold back when a rate limit states no wait. */
   readonly rateLimitBackoffMs?: number
+  /** How many batches the host is partitioned into; defaults to one. */
+  readonly batches?: number
+  /** Whole CPUs each batch may claim; defaults to the host minus the reserve. */
+  readonly batchCpu?: number
+  /** Mebibytes each batch may claim; defaults to the host minus the reserve. */
+  readonly batchRamMb?: number
+  /** Whole CPUs held back from the batches; defaults to one. */
+  readonly reservedCpu?: number
+  /** Mebibytes held back from the batches; defaults to 2048. */
+  readonly reservedRamMb?: number
+}
+
+/**
+ * Read a positive whole-number flag value.
+ * @param flag - the flag, for the message.
+ * @param raw - the value as written.
+ * @returns the parsed value.
+ * @throws Error when the value is not a positive whole number.
+ */
+function positiveWhole(flag: string | undefined, raw: string): number {
+  const parsed = Number(raw)
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new Error(`${String(flag)} must be a positive whole number, received ${raw}`)
+  }
+  return parsed
+}
+
+/**
+ * Read a whole-number flag value that may be zero.
+ * @param flag - the flag, for the message.
+ * @param raw - the value as written.
+ * @returns the parsed value.
+ * @throws Error when the value is not a non-negative whole number.
+ */
+function nonNegativeWhole(flag: string | undefined, raw: string): number {
+  const parsed = Number(raw)
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    throw new Error(`${String(flag)} must be a whole number of zero or more, received ${raw}`)
+  }
+  return parsed
 }
 
 /**
@@ -60,6 +105,11 @@ export function parseRunnerArgs(argv: readonly string[]): RunnerArgs {
   let attemptTimeoutMs: number | undefined
   let maxConcurrentTasks: number | undefined
   let rateLimitBackoffMs: number | undefined
+  let batches: number | undefined
+  let batchCpu: number | undefined
+  let batchRamMb: number | undefined
+  let reservedCpu: number | undefined
+  let reservedRamMb: number | undefined
   const only: string[] = []
   for (let index = 0; index < argv.length; index++) {
     const flag = argv[index]
@@ -103,6 +153,11 @@ export function parseRunnerArgs(argv: readonly string[]): RunnerArgs {
         rateLimitBackoffMs = parsed
         break
       }
+      case '--batches': batches = positiveWhole(flag, take()); break
+      case '--batch-cpu': batchCpu = positiveWhole(flag, take()); break
+      case '--batch-ram-mb': batchRamMb = positiveWhole(flag, take()); break
+      case '--reserved-cpu': reservedCpu = nonNegativeWhole(flag, take()); break
+      case '--reserved-ram-mb': reservedRamMb = nonNegativeWhole(flag, take()); break
       default: throw new Error(`unknown argument ${JSON.stringify(String(flag))}`)
     }
   }
@@ -118,6 +173,11 @@ export function parseRunnerArgs(argv: readonly string[]): RunnerArgs {
     ...attemptTimeoutMs === undefined ? {} : { attemptTimeoutMs },
     ...maxConcurrentTasks === undefined ? {} : { maxConcurrentTasks },
     ...rateLimitBackoffMs === undefined ? {} : { rateLimitBackoffMs },
+    ...batches === undefined ? {} : { batches },
+    ...batchCpu === undefined ? {} : { batchCpu },
+    ...batchRamMb === undefined ? {} : { batchRamMb },
+    ...reservedCpu === undefined ? {} : { reservedCpu },
+    ...reservedRamMb === undefined ? {} : { reservedRamMb },
   }
 }
 
@@ -199,6 +259,34 @@ export async function runAll(
 }
 
 /**
+ * Build the partitioning a run will use.
+ *
+ * The host is measured rather than assumed, because a container is usually
+ * granted less than the machine reports and a plan built on the machine's figure
+ * would be killed partway through a run. A caller that states its own batch size
+ * gets exactly what it asked for, so an over-allocation is caught instead of
+ * being quietly corrected.
+ *
+ * @param args - the parsed command line.
+ * @param host - the measured host; defaults to this machine's.
+ * @returns the plan, ready for validation.
+ */
+export function resourcePlanFor(args: RunnerArgs, host: HostResources = detectHostResources()): ResourcePlanInput {
+  const reservedCpu = args.reservedCpu ?? 1
+  const reservedMemoryMb = args.reservedRamMb ?? DEFAULT_RESERVED_RAM_MB
+  const batchCount = args.batches ?? 1
+  const batchCpu = args.batchCpu ?? Math.max(0, Math.floor((host.cpu - reservedCpu) / batchCount))
+  const batchMemoryMb = args.batchRamMb ?? Math.max(0, Math.floor((host.memoryMb - reservedMemoryMb) / batchCount))
+  return {
+    host,
+    batches: Array.from({ length: batchCount }, () => ({ cpu: batchCpu, memoryMb: batchMemoryMb })),
+    reservedCpu,
+    reservedMemoryMb,
+    maxConcurrentTasks: args.maxConcurrentTasks ?? 1,
+  }
+}
+
+/**
  * Print one line per finished task.
  * @param reports - the reports to print.
  * @returns the same reports.
@@ -230,12 +318,19 @@ export async function main(
   options: { agent?: AgentRunner } = {},
 ): Promise<RunReport[]> {
   const args = parseRunnerArgs(argv)
+  // The partitioning is checked before anything is booted, so an over-allocated
+  // plan costs a failed startup rather than a run the kernel kills partway.
+  assertPlanHolds(resourcePlanFor(args))
   const secrets = collectEnvironmentSecrets()
   if (options.agent !== undefined) {
     return report(await runAll(args, options.agent, { secrets }))
   }
   const composition = await bootDistillComposition()
   try {
+    const host = detectHostResources()
+    process.stdout.write(
+      `host: ${String(host.cpu)} CPU (${host.cpuSource}), ${String(host.memoryMb)} MB (${host.memorySource})\n`,
+    )
     // The registry is the only place that knows which tools the composition
     // actually holds, so the attempt records what ran rather than what was asked.
     const environment = { available_tools: availableToolsOf(composition.ctx) }

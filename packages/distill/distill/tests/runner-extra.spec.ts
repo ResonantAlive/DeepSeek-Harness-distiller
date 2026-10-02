@@ -7,7 +7,8 @@ import { DatasetWriter } from '../src/dataset.ts'
 import { discardAttempt, attemptLimits, budgetBreach, endAttempt, promptFor, readEvents, repeatedAction, runTask, totalTokens } from '../src/runner.ts'
 import type { AgentRunner, AttemptContext } from '../src/runner.ts'
 import { buildTrajectory, textOf } from '../src/trajectory.ts'
-import { parseRunnerArgs } from '../../../../apps/distill/src/bin.ts'
+import { parseRunnerArgs, resourcePlanFor } from '../../../../apps/distill/src/bin.ts'
+import { validate } from '@deepseek-ai/dsh-distill-resource'
 import type { RawEvent } from '@deepseek-ai/dsh-distill-trajectory-events/writer'
 import type { TaskDefinition } from '../src/types.ts'
 
@@ -376,6 +377,29 @@ describe('parseRunnerArgs', () => {
     expect(args.only).toEqual(['T-1', 'T-2'])
   })
 
+  it('refuses a declared partitioning the measured host cannot hold', () => {
+    const host = { cpu: 8, memoryMb: 8192, cpuSource: 'os' as const, memorySource: 'os' as const, platform: 'linux' }
+    // One batch of the whole host minus the reserve fits.
+    expect(validate(resourcePlanFor(parseRunnerArgs(['--manifest', 'm.yml', '--out', 'o']), host)).errors).toEqual([])
+    // More batches than the host can seat is refused rather than silently trimmed.
+    const over = resourcePlanFor(
+      parseRunnerArgs(['--manifest', 'm.yml', '--out', 'o', '--batches', '4', '--batch-cpu', '8']),
+      host,
+    )
+    expect(validate(over).errors.join(' ')).toContain('over-allocated CPU')
+  })
+
+  it('parses the partitioning flags and refuses an unusable value', () => {
+    const args = parseRunnerArgs([
+      '--manifest', 'm.yml', '--out', 'o',
+      '--batches', '2', '--batch-cpu', '3', '--batch-ram-mb', '1024',
+      '--reserved-cpu', '0', '--reserved-ram-mb', '512',
+    ])
+    expect([args.batches, args.batchCpu, args.batchRamMb, args.reservedCpu, args.reservedRamMb])
+      .toEqual([2, 3, 1024, 0, 512])
+    expect(() => parseRunnerArgs(['--manifest', 'm.yml', '--out', 'o', '--batches', '0'])).toThrow(/positive whole number/)
+    expect(() => parseRunnerArgs(['--manifest', 'm.yml', '--out', 'o', '--reserved-cpu', '-1'])).toThrow(/zero or more/)
+  })
   it('omits the optional paths when they are absent', () => {
     const args = parseRunnerArgs(['--manifest', 'm.yml', '--out', 'out'])
     expect(args.templates).toBeUndefined()
