@@ -158,6 +158,30 @@ export interface TaskResult {
 }
 
 /**
+ * Read the attempt a task document summarises itself from.
+ *
+ * A task always runs at least one attempt, because the loop starts at the first
+ * and stops only after judging one. Keeping that fact in one place is why this
+ * exists: an inline `trajectories[0]?.field ?? fallback` at each use would leave
+ * an unreachable fallback in the document instead of one guarded read.
+ *
+ * @param trajectories - the attempts the task recorded.
+ * @param end - which end to read: the attempt that started it, or the one that ended it.
+ * @returns the attempt at that end.
+ * @throws Error when the task recorded no attempt at all.
+ */
+export function endAttempt(
+  trajectories: readonly AttemptTrajectory[],
+  end: 'first' | 'last',
+): AttemptTrajectory {
+  const attempt = end === 'first' ? trajectories[0] : trajectories.at(-1)
+  if (attempt === undefined) {
+    throw new Error('a task document needs at least one attempt, but none was recorded')
+  }
+  return attempt
+}
+
+/**
  * Zero-padded attempt identity.
  * @param ordinal - the zero-based attempt index.
  * @returns the identity, as `attempt_001` for the first attempt.
@@ -348,8 +372,11 @@ export async function runTask(options: RunTaskOptions): Promise<TaskResult> {
     const evaluatorDir = join(attemptRoot, 'evaluator')
     await mkdir(attemptRoot, { recursive: true })
     await prepareWorkspace(task.workspace, options.templatesRoot, workspace)
-    if ((task.evaluator.assets ?? []).length > 0) {
-      await stageAssets(assetRoot, evaluatorDir, task.evaluator.assets ?? [])
+    // Read the asset list once: repeating `?? []` at the guard and the call left
+    // a second fallback that the guard had already ruled out.
+    const assets = task.evaluator.assets ?? []
+    if (assets.length > 0) {
+      await stageAssets(assetRoot, evaluatorDir, assets)
     } else {
       await mkdir(evaluatorDir, { recursive: true })
     }
@@ -530,7 +557,9 @@ export async function runTask(options: RunTaskOptions): Promise<TaskResult> {
       // The budget is spent. An agent-side error keeps its identity; anything else
       // that never succeeded is abandoned.
       status = attemptStatus === 'ERROR' ? 'ERROR' : 'ABANDONED'
-      errorClass = attemptStatus === 'ERROR' ? (outcome.errorClass ?? 'agent') : undefined
+      // An attempt is ERROR only when no evaluator ran, which happens only for a
+      // fault the agent itself classified, so the class is already known here.
+      errorClass = attemptStatus === 'ERROR' ? outcome.errorClass : undefined
       break
     }
   }
@@ -547,10 +576,10 @@ export async function runTask(options: RunTaskOptions): Promise<TaskResult> {
     attempts: trajectories,
     failure: status === 'SUCCESS' ? null : {
       type: status,
-      reason: trajectories.at(-1)?.trajectory.length === 0 ? 'no steps recorded' : 'see the attempt evaluation',
+      reason: endAttempt(trajectories, 'last').trajectory.length === 0 ? 'no steps recorded' : 'see the attempt evaluation',
     },
     metadata: {
-      started_at: trajectories[0]?.started_at ?? finishedAt,
+      started_at: endAttempt(trajectories, 'first').started_at,
       finished_at: finishedAt,
       tags: task.tags ?? [],
     },
@@ -571,11 +600,11 @@ export async function runTask(options: RunTaskOptions): Promise<TaskResult> {
     selected_attempt_id: selectedAttemptId,
     integrity_flags: [...allFlags].sort(),
     teacher: {
-      provider: trajectories.at(-1)?.teacher.provider ?? 'unknown',
-      model: trajectories.at(-1)?.teacher.model ?? 'unknown',
+      provider: endAttempt(trajectories, 'last').teacher.provider,
+      model: endAttempt(trajectories, 'last').teacher.model,
     },
     file_capture: { git: false, coverage: 'file-tools-only' },
-    started_at: trajectories[0]?.started_at ?? finishedAt,
+    started_at: endAttempt(trajectories, 'first').started_at,
     finished_at: finishedAt,
     dataset_dir: datasetDir,
   })

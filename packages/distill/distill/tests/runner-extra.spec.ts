@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { DatasetWriter } from '../src/dataset.ts'
-import { discardAttempt, attemptLimits, budgetBreach, promptFor, readEvents, repeatedAction, runTask, totalTokens } from '../src/runner.ts'
+import { discardAttempt, attemptLimits, budgetBreach, endAttempt, promptFor, readEvents, repeatedAction, runTask, totalTokens } from '../src/runner.ts'
 import type { AgentRunner, AttemptContext } from '../src/runner.ts'
 import { buildTrajectory, textOf } from '../src/trajectory.ts'
 import { parseRunnerArgs } from '../../../../apps/distill/src/bin.ts'
@@ -492,6 +492,57 @@ describe('attempt budgets', () => {
       }),
     })
     expect(result.attempts[0]?.artifacts.files_modified).toContain('README.md')
+  })
+  it('assumes five attempts when neither the task nor the manifest states one', async () => {
+    const root = await scratch()
+    const dataset = new DatasetWriter({ root: join(root, 'dataset') })
+    let runs = 0
+    const result = await runTask({
+      task: task(),
+      defaults: {},
+      templatesRoot: await templatesAt(root),
+      evaluatorRoot: join(root, 'evaluator'),
+      runsRoot: join(root, 'runs'),
+      dataset,
+      agent: teacher(async () => {
+        runs += 1
+        return { status: 'FAILED', reason: 'not yet' }
+      }),
+    })
+    expect(runs).toBe(5)
+    expect(result.status).toBe('ABANDONED')
+  })
+
+  it('stages the hidden assets a task declares', async () => {
+    const root = await scratch()
+    const dataset = new DatasetWriter({ root: join(root, 'dataset') })
+    const evaluators = join(root, 'evaluator')
+    await mkdir(join(evaluators, 'T-X'), { recursive: true })
+    await writeFile(join(evaluators, 'T-X', 'suite.mjs'), 'export default 1\n', 'utf8')
+    const result = await runTask({
+      task: task({ evaluator: { ...MARKER_EVALUATOR, assets: ['suite.mjs'] } }),
+      defaults: { max_attempts: 1 },
+      templatesRoot: await templatesAt(root),
+      evaluatorRoot: evaluators,
+      runsRoot: join(root, 'runs'),
+      dataset,
+      agent: teacher(async (context) => {
+        await succeed(context)
+        return { status: 'SUCCESS', reason: 'done' }
+      }),
+    })
+    // The asset was staged into the attempt's own evaluator directory.
+    expect(existsSync(join(root, 'runs', 'T-X', 'attempt_001', 'evaluator', 'suite.mjs'))).toBe(true)
+    expect(result.status).toBe('SUCCESS')
+  })
+  it('reads either end of a task attempt list, and refuses an empty one', () => {
+    const attempts = buildTrajectory([], { ...options, attemptId: 'attempt_001' })
+    const second = buildTrajectory([], { ...options, attemptId: 'attempt_002' })
+    expect(endAttempt([attempts, second], 'first').attempt_id).toBe('attempt_001')
+    expect(endAttempt([attempts, second], 'last').attempt_id).toBe('attempt_002')
+    // A document that recorded no attempt at all cannot be summarised.
+    expect(() => endAttempt([], 'first')).toThrow(/needs at least one attempt/)
+    expect(() => endAttempt([], 'last')).toThrow(/needs at least one attempt/)
   })
   it('carries every budget a task or its manifest states', () => {
     const limits = attemptLimits({

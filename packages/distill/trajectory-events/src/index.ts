@@ -265,8 +265,9 @@ export class TrajectoryRecorder {
   }
 
   /**
-   * Record one live assistant stream frame. Text and reasoning deltas are the
-   * only frames carrying content; boundaries and usage are already durable.
+   * Record one live assistant stream frame. Deltas carry the streamed text, and a
+   * usage frame carries the model the provider named; boundaries are already
+   * durable as session events.
    * @param frame - the live frame published by the loop.
    */
   recordStreamFrame(frame: AssistantStreamFrame): void {

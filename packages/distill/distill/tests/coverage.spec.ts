@@ -280,6 +280,40 @@ describe('trajectory edge cases', () => {
     expect(empty.final).toBe('')
   })
 
+  it('keeps the identity it had when a header states only part of it', () => {
+    // A header that names no provider leaves the running identity alone rather
+    // than resetting it to nothing.
+    const trajectory = buildTrajectory([
+      event('task_start', { phase: 'request-header', config: { model: 'deepseek-flash' } }),
+    ], options)
+    expect(trajectory.teacher.provider).toBe('unknown')
+    expect(trajectory.teacher.model).toBe('deepseek-flash')
+  })
+
+  it('keeps the header model when a header names only the provider', () => {
+    const trajectory = buildTrajectory([
+      event('task_start', { phase: 'request-header', config: { provider: 'deepseek-official' } }),
+    ], options)
+    expect(trajectory.teacher.model).toBe('unknown')
+    expect(trajectory.teacher.provider).toBe('deepseek-official')
+  })
+  it('reads a limit stated on the task itself', () => {
+    const task = parseTask('t.yml', {
+      version: 1,
+      task_id: 'T-1',
+      prompt: 'p',
+      workspace: { template: 't' },
+      evaluator: { kind: 'test_command', command: ['true'] },
+      attempt_timeout_ms: 1000,
+      max_steps_per_attempt: 4,
+      max_tokens_per_attempt: 900,
+      repeat_action_limit: 2,
+    })
+    expect(task.attempt_timeout_ms).toBe(1000)
+    expect(task.max_steps_per_attempt).toBe(4)
+    expect(task.max_tokens_per_attempt).toBe(900)
+    expect(task.repeat_action_limit).toBe(2)
+  })
   it('keeps the header provider and model when the configuration states them', () => {
     const trajectory = buildTrajectory([
       event('task_start', { phase: 'request-header', config: { provider: 'deepseek-official', model: 'deepseek-flash' } }),

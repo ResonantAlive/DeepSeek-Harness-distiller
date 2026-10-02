@@ -165,11 +165,14 @@ export function boundedJson(value: unknown, budget: number): { text: string; tru
     used = budget
   }
 
-  /** Render a container body into its own buffer, then commit it only when closed. */
+  /**
+   * Render a container body into its own buffer, then commit it only when closed.
+   *
+   * Every body stops as soon as the budget is spent and returns `false`, which
+   * rolls its container back, so a container is never started after an earlier
+   * sibling gave up and needs no guard of its own for that case.
+   */
   const container = (open: string, close: string, body: () => boolean): void => {
-    // An earlier sibling already gave up, so this container cannot be closed and
-    // must contribute nothing.
-    if (truncated) return
     const outer = parts.length
     const outerUsed = used
     const openBytes = Buffer.byteLength(open, 'utf8')

@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -6,7 +6,7 @@ import { Context } from '@deepseek-ai/cordis'
 import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
 import type { AssistantStreamFrame } from '@deepseek-ai/dsh-agent'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
-import { ReasoningEffortId, ToolCallId } from '@deepseek-ai/dsh-llm'
+import { LlmAttemptId, ReasoningEffortId, ToolCallId } from '@deepseek-ai/dsh-llm'
 import { TrajectoryCapture, TrajectoryRecorder, apply, captureOf, createRecorder, decisionOf, recordUsage } from '../src/index.ts'
 import type { RawEvent } from '../src/writer.ts'
 
@@ -301,7 +301,7 @@ describe('TrajectoryRecorder stream frames', () => {
     const recorder = recorderAt(root)
     recorder.recordStreamFrame(frame({ type: 'reasoning-delta', index: 0, text: '' }))
     recorder.recordStreamFrame(frame({ type: 'text-delta', index: 0, text: '' }))
-    recorder.recordStreamFrame(frame({ type: 'usage', usage: { inputTokens: 1, outputTokens: 1 } }))
+    recorder.recordStreamFrame({ type: 'chunk', chunk: { type: 'usage', usage: { inputTokens: 1, outputTokens: 1 } } } as AssistantStreamFrame)
     await recorder.flush()
     expect(recorder.length).toBe(0)
   })
@@ -404,6 +404,61 @@ describe('createRecorder and the capture plugin', () => {
     expect(events.map(entry => entry.event_type).sort()).toEqual(['reasoning_delta', 'task_start'])
   })
 
+  it('records the model the provider named on a usage frame', async () => {
+    const root = await scratch()
+    const recorder = recorderAt(root)
+    recorder.recordStreamFrame({ type: 'chunk', chunk: { type: 'usage', usage: { inputTokens: 1, outputTokens: 1 }, servedModel: 'deepseek-flash-2026' } } as AssistantStreamFrame)
+    await recorder.flush()
+    const events = await readEvents(root)
+    expect(events).toHaveLength(1)
+    expect(events[0]?.payload).toMatchObject({ phase: 'response-header', model: 'deepseek-flash-2026' })
+  })
+
+  it('ignores a usage frame that names no serving model', async () => {
+    const root = await scratch()
+    const recorder = recorderAt(root)
+    recorder.recordStreamFrame({ type: 'chunk', chunk: { type: 'usage', usage: { inputTokens: 1, outputTokens: 1 } } } as AssistantStreamFrame)
+    await recorder.flush()
+    expect(recorder.length).toBe(0)
+  })
+
+  it('keeps the queue alive after one append fails', async () => {
+    const root = await scratch()
+    // A directory where the log belongs makes every append fail deterministically.
+    await mkdir(join(root, 'events.jsonl'), { recursive: true })
+    const recorder = recorderAt(root)
+    await expect(recorder.append('task_start', { phase: 'probe' })).rejects.toThrow()
+    // The chain survived: a later append is attempted rather than wedged behind
+    // the failure, and it reports its own outcome.
+    await expect(recorder.append('task_start', { phase: 'probe' })).rejects.toThrow()
+  })
+  it('ignores a frame that is not a chunk', async () => {
+    const root = await scratch()
+    const recorder = recorderAt(root)
+    recorder.recordStreamFrame({ type: 'start', attemptId: LlmAttemptId('a'), revision: 1, turn: 1, step: 1 })
+    await recorder.flush()
+    expect(recorder.length).toBe(0)
+  })
+
+  it('leaves the active attempt alone when a superseded binding is released', async () => {
+    const root = await scratch()
+    const first = recorderAt(root)
+    const second = recorderAt(root)
+    const ctx = new Context()
+    apply(ctx)
+    const capture = captureOf(ctx)
+    const releaseFirst = capture?.bind(first)
+    capture?.bind(second)
+    // Releasing the superseded binding must not unbind the current attempt.
+    releaseFirst?.()
+    expect(capture?.current).toBe(second)
+  })
+  it('reports which attempt is bound', () => {
+    const ctx = new Context()
+    apply(ctx)
+    const capture = captureOf(ctx)
+    expect(capture?.current).toBeUndefined()
+  })
   it('records nothing between attempts and stops on release', async () => {
     const root = await scratch()
     const recorder = recorderAt(root)
