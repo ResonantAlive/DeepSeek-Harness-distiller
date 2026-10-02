@@ -58,6 +58,17 @@ export interface RunnerArgs {
   readonly reservedCpu?: number
   /** Mebibytes held back from the batches; defaults to 2048. */
   readonly reservedRamMb?: number
+  /**
+   * Which slice of the task list this process runs, as `[index, count]`.
+   *
+   * Parallelism here is one process per slice, each running its tasks in turn;
+   * nothing inside a process runs concurrently. Every process writes to the same
+   * dataset, whose index is guarded by a cross-process lock and whose documents
+   * are written atomically.
+   *
+   * Omission means every task, which is what a single process wants.
+   */
+  readonly shard?: readonly [number, number]
 }
 
 /**
@@ -110,6 +121,8 @@ export function parseRunnerArgs(argv: readonly string[]): RunnerArgs {
   let batchRamMb: number | undefined
   let reservedCpu: number | undefined
   let reservedRamMb: number | undefined
+  // The default slice is every task, so a single process behaves as it always has.
+  let shard: [number, number] = [0, 1]
   const only: string[] = []
   for (let index = 0; index < argv.length; index++) {
     const flag = argv[index]
@@ -158,6 +171,17 @@ export function parseRunnerArgs(argv: readonly string[]): RunnerArgs {
       case '--batch-ram-mb': batchRamMb = positiveWhole(flag, take()); break
       case '--reserved-cpu': reservedCpu = nonNegativeWhole(flag, take()); break
       case '--reserved-ram-mb': reservedRamMb = nonNegativeWhole(flag, take()); break
+      case '--shard': {
+        const raw = take()
+        const match = /^(\d+)\/(\d+)$/.exec(raw)
+        if (match === null) throw new Error(`--shard must look like <index>/<count>, received ${raw}`)
+        const index = Number(match[1])
+        const count = Number(match[2])
+        if (count < 1) throw new Error(`--shard count must be at least 1, received ${raw}`)
+        if (index >= count) throw new Error(`--shard index must be below its count, received ${raw}`)
+        shard = [index, count]
+        break
+      }
       default: throw new Error(`unknown argument ${JSON.stringify(String(flag))}`)
     }
   }
@@ -178,6 +202,7 @@ export function parseRunnerArgs(argv: readonly string[]): RunnerArgs {
     ...batchRamMb === undefined ? {} : { batchRamMb },
     ...reservedCpu === undefined ? {} : { reservedCpu },
     ...reservedRamMb === undefined ? {} : { reservedRamMb },
+    shard,
   }
 }
 
@@ -226,8 +251,13 @@ export async function runAll(
   const selected = args.only === undefined
     ? loaded.tasks
     : loaded.tasks.filter(task => args.only?.includes(task.task_id))
+  // Each process takes every nth task, so the slices are disjoint by construction
+  // and no two processes run the same task. A caller that states no slice takes
+  // every task, because every index is congruent to zero modulo one.
+  const [shardIndex, shardCount] = args.shard ?? [0, 1]
+  const mine = selected.filter((_, index) => index % shardCount === shardIndex)
   const reports: RunReport[] = []
-  for (const task of selected) {
+  for (const task of mine) {
     if (await dataset.completed(task.task_id) !== undefined) continue
     const result = await gate.run(async () => runTask({
       task,

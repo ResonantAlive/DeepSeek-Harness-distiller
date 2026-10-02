@@ -400,6 +400,12 @@ export async function runTask(options: RunTaskOptions): Promise<TaskResult> {
     const attemptRoot = join(taskRoot, attemptId)
     const workspace = join(attemptRoot, 'workspace')
     const evaluatorDir = join(attemptRoot, 'evaluator')
+    // An earlier run of this attempt may have been killed partway and left its
+    // files behind. The workspace below is prepared by merging the template into
+    // whatever is already there, so without this an attempt could inherit the
+    // deliverable a killed predecessor had already written and pass judgment
+    // without doing the work.
+    await rm(attemptRoot, { recursive: true, force: true })
     await mkdir(attemptRoot, { recursive: true })
     await prepareWorkspace(task.workspace, options.templatesRoot, workspace)
     // Read the asset list once: repeating `?? []` at the guard and the call left
