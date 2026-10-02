@@ -9,7 +9,7 @@ kind: "package-group"
 
 ## 概述
 
-`distill/` 组记录教师模型在求解任务过程中的行为，使结果可用于训练学生模型。一个包脱敏密钥，一个包把组合锁定到单一教师，一个包在 agent 工作时捕获事件，一个包运行 attempt 并依据任务声明的命令对其做出判定，还有一个包在运行开始前划分宿主资源。本组在磁盘上产出数据集；它不新增 Harness 服务，由 `apps/distill` 应用驱动。
+`distill/` 组记录教师模型在求解任务过程中的行为，使结果可用于训练学生模型。一个包脱敏密钥，一个包把组合锁定到单一教师，一个包在 agent 工作时捕获事件，一个包运行 attempt 并依据任务声明的命令对其做出判定，还有一个包在运行开始前划分宿主资源。本组在磁盘上产出数据集，由 `apps/distill` 应用驱动。
 
 ## 目录
 
@@ -37,6 +37,7 @@ kind: "package-group"
 <a id="related-documentation"></a>
 ## 相关文档
 
+- [蒸馏子系统参考](../../docs/subsystems/distill.zh.md) —— 捕获服务、一次尝试记录的内容、数据集分桶，以及宿主切分。
 - [`apps/distill`](../../apps/distill) 把这些包组合成运行语料库的应用。
 
 <a id="dev-note"></a>

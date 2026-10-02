@@ -50,6 +50,9 @@ export { REGION_BEGIN, REGION_END }
  * errors, so the partition can never silently drift from the service API.
  */
 export const SERVICE_PAGE: Record<string, string> = {
+  // The capture is the read side of a run's trajectory, so the subsystem that
+  // owns the trajectory owns its page.
+  distillCapture: 'distill.md',
   speechToText: 'voice-input.md',
   speechController: 'voice-input.md',
   otel: 'otel.md',

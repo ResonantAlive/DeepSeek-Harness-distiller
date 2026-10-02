@@ -985,6 +985,29 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'distillCapture',
+    summary: 'Routes the live session and stream events of one run to the attempt that is currently bound.',
+    description: 'Routes the live session and stream events of one run to the attempt that is currently bound.\n\nThe plugin subscribes once, at mount, because a subscription per attempt would accumulate for the life of the process. An attempt binds its own recorder for exactly its own lifetime, so events never cross between attempts. The plugin needs no configuration: an attempt\'s recorder already owns its destination and its redaction rules.',
+    methods: [
+      {
+        signature: 'bind(recorder: TrajectoryRecorder): () => void',
+        description: 'Route this run\'s events to one attempt\'s recorder until released.',
+        parameters: [{ name: 'recorder', description: 'the attempt\'s recorder.' }],
+        returns: 'a function that unbinds; a second call is a no-op.',
+      },
+      {
+        signature: 'record(session: Session, event: SessionEvent): void',
+        description: 'Record one committed session event against the bound attempt.',
+        parameters: [{ name: 'session', description: 'the session that committed it.' }, { name: 'event', description: 'the committed event.' }],
+      },
+      {
+        signature: 'recordStreamFrame(frame: AssistantStreamFrame): void',
+        description: 'Record one live assistant stream frame against the bound attempt.',
+        parameters: [{ name: 'frame', description: 'the stream frame the adapter produced.' }],
+      },
+    ],
+  },
+  {
     key: 'fileReferences',
     summary: 'Host capability for cancellable file-reference discovery.',
     description: 'Host capability for cancellable file-reference discovery.',
@@ -4694,6 +4717,18 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface BashEnvVariableInfo extends BashEnvVariable {\n    contributor: string;\n    key: DshEnvironmentKey;\n}',
   },
   {
+    name: 'BlobRef',
+    declaration: 'export interface BlobRef {\n    readonly sha256: string;\n    readonly bytes: number;\n    readonly path: string;\n}',
+  },
+  {
+    name: 'BlobStore',
+    declaration: 'export class BlobStore {\n    constructor(options: BlobStoreOptions);\n    async put(content: Buffer): Promise<BlobRef>;\n    async get(sha256: string): Promise<Buffer>;\n}',
+  },
+  {
+    name: 'BlobStoreOptions',
+    declaration: 'export interface BlobStoreOptions {\n    readonly root: string;\n}',
+  },
+  {
     name: 'Branded',
     declaration: 'export type Branded<B extends string> = string & {\n    readonly [BRAND]: B;\n};',
   },
@@ -5184,10 +5219,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'FileBlock',
     declaration: 'export interface FileBlock {\n    type: \'file\';\n    attachment: FileAttachmentRef;\n}',
-  },
-  {
-    name: 'FileDiff',
-    declaration: 'export interface FileDiff {\n    path: string;\n    oldText: string | null;\n    newText: string;\n}',
   },
   {
     name: 'FileLocation',
@@ -6142,6 +6173,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type QueueAction = {\n    readonly kind: \'edit\';\n    readonly content: readonly TextBlock[];\n} | {\n    readonly kind: \'remove\';\n} | {\n    readonly kind: \'steer\';\n};',
   },
   {
+    name: 'RawEvent',
+    declaration: 'export interface RawEvent {\n    readonly event_id: string;\n    readonly seq: number;\n    readonly task_id: string;\n    readonly attempt_id: string;\n    readonly batch_id: string;\n    readonly event_type: string;\n    readonly timestamp: string;\n    readonly monotonic_ms: number;\n    readonly payload: Readonly<Record<string, unknown>>;\n}',
+  },
+  {
+    name: 'RawEventType',
+    declaration: 'export type RawEventType = \'task_start\' | \'assistant_message\' | \'assistant_attempt\' | \'reasoning_delta\' | \'tool_call\' | \'tool_result\' | \'file_change\' | \'evaluator\' | \'attempt_end\' | \'error\' | \'task_end\' | \'cancellation\';',
+  },
+  {
     name: 'ReadFileLine',
     declaration: 'export interface ReadFileLine {\n    number: number;\n    text: string;\n}',
   },
@@ -6166,8 +6205,24 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type RecurringScheduleRecord = EveryScheduleRecord | DailyScheduleRecord | WeeklyScheduleRecord | CronScheduleRecord;',
   },
   {
+    name: 'RedactableValue',
+    declaration: 'export type RedactableValue = string | number | boolean | null | readonly RedactableValue[] | {\n    readonly [key: string]: RedactableValue;\n};',
+  },
+  {
     name: 'RedactedSecret',
     declaration: 'export interface RedactedSecret {\n    path: string[];\n    set: boolean;\n}',
+  },
+  {
+    name: 'RedactionCounts',
+    declaration: 'export interface RedactionCounts {\n    readonly byRule: Readonly<Record<string, number>>;\n    readonly total: number;\n}',
+  },
+  {
+    name: 'RedactionResult',
+    declaration: 'export interface RedactionResult<T> {\n    readonly value: T;\n    readonly counts: RedactionCounts;\n}',
+  },
+  {
+    name: 'Redactor',
+    declaration: 'export interface Redactor {\n    redact(text: string): RedactionResult<string>;\n    redactValue<T extends RedactableValue>(value: T): RedactionResult<T>;\n}',
   },
   {
     name: 'Registry',
@@ -7219,7 +7274,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'StreamChunk',
-    declaration: 'export type StreamChunk = {\n    type: \'block-start\';\n    index: number;\n    blockType: ContentBlockType;\n} | {\n    type: \'text-delta\';\n    index: number;\n    text: string;\n} | {\n    type: \'reasoning-delta\';\n    index: number;\n    text: string;\n} | {\n    type: \'tool-call-delta\';\n    index: number;\n    id: ToolCallId;\n    name?: string;\n    argumentsDelta: string;\n} | {\n    type: \'block-end\';\n    index: number;\n    block: ContentBlock;\n} | {\n    type: \'usage\';\n    usage: TokenUsage;\n} | {\n    type: \'finish\';\n    reason: FinishReason;\n    replayState?: ReplayEnvelope;\n};',
+    declaration: 'export type StreamChunk = {\n    type: \'block-start\';\n    index: number;\n    blockType: ContentBlockType;\n} | {\n    type: \'text-delta\';\n    index: number;\n    text: string;\n} | {\n    type: \'reasoning-delta\';\n    index: number;\n    text: string;\n} | {\n    type: \'tool-call-delta\';\n    index: number;\n    id: ToolCallId;\n    name?: string;\n    argumentsDelta: string;\n} | {\n    type: \'block-end\';\n    index: number;\n    block: ContentBlock;\n} | {\n    type: \'usage\';\n    usage: TokenUsage;\n    servedModel?: string;\n} | {\n    type: \'finish\';\n    reason: FinishReason;\n    replayState?: ReplayEnvelope;\n};',
   },
   {
     name: 'SubagentCapabilities',
@@ -7704,6 +7759,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ToolUpdate',
     declaration: 'export type ToolUpdate = \'in-history\' | \'addition-only\';',
+  },
+  {
+    name: 'TrajectoryRecorder',
+    declaration: 'export class TrajectoryRecorder {\n    constructor(options: TrajectoryRecorderOptions);\n    get path(): string;\n    get length(): number;\n    get lastSessionSequence(): number;\n    get redaction(): Redactor;\n    append(eventType: RawEventType, payload: Readonly<Record<string, unknown>>): Promise<RawEvent>;\n    async flush(): Promise<void>;\n    record(session: Session, event: SessionEvent): void;\n    recordStreamFrame(frame: AssistantStreamFrame): void;\n}',
+  },
+  {
+    name: 'TrajectoryRecorderOptions',
+    declaration: 'export interface TrajectoryRecorderOptions {\n    readonly root: string;\n    readonly taskId: string;\n    readonly attemptId: string;\n    readonly batchId: string;\n    readonly secrets?: readonly string[];\n    readonly disableRules?: readonly string[];\n    readonly maxInlineBytes?: number;\n    readonly blobs?: BlobStore;\n}',
   },
   {
     name: 'Transcript',

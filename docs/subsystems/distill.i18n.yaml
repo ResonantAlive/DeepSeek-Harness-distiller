@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for distill.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/subsystems/distill.md
+/distillation:
+  en: 85bc6c9639a53d93
+  zh: 94cc97d5f822d9af
+/distillation/the-trajectory-capture-service:
+  en: 37ee42d366109ebf
+  zh: c2860ee02524c108
+/distillation/what-an-attempt-records:
+  en: dd8934d03aa7e142
+  zh: 44d942c9ab757bcc
+/distillation/where-documents-land:
+  en: a653aedddd29a9b0
+  zh: fad86427945c0ae5
+/distillation/resource-partitioning:
+  en: f389f00526856e8e
+  zh: 7bbf8c386dbe90d0

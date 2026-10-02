@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-The `distill/` group records what a teacher model does while it solves a task, so the result can train a student. One package redacts secrets, one locks the composition to a single teacher, one captures events while the agent works, one runs attempts and judges them against commands the task declares, and one partitions the host before a run starts. The group produces a dataset on disk; it adds no Harness service, and the `apps/distill` application drives it.
+The `distill/` group records what a teacher model does while it solves a task, so the result can train a student. One package redacts secrets, one locks the composition to a single teacher, one captures events while the agent works, one runs attempts and judges them against commands the task declares, and one partitions the host before a run starts. The group produces a dataset on disk, and the `apps/distill` application drives it.
 
 ## Table of Contents
 
@@ -37,6 +37,7 @@ Each package owns one stage of a run; open a package page for how to use it.
 <a id="related-documentation"></a>
 ## Related documentation
 
+- [Distillation subsystem reference](../../docs/subsystems/distill.md) — the capture service, what an attempt records, the dataset buckets, and host partitioning.
 - [`apps/distill`](../../apps/distill) composes these packages into the application that runs a corpus.
 
 <a id="dev-note"></a>
