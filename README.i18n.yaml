@@ -3,65 +3,38 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write README.md
 /deepseek-harness-distiller:
-  en: f1c154d15290e56d
-  zh: 96582fc7985c4cec
-/deepseek-harness-distiller/summary:
-  en: 8365d4991d41c1a6
-  zh: 3c5931ae6f175989
-/deepseek-harness-distiller/files-changed-in-the-original-source:
-  en: 124be2a969b9c2d8
-  zh: 11631640bf31de5c
-/deepseek-harness-distiller/files-changed-in-the-original-source/1-packages-llm-llm-src-types-ts:
-  en: 1845932d5ac982c7
-  zh: 073fc0fbadb442a0
-/deepseek-harness-distiller/files-changed-in-the-original-source/2-packages-llm-llm-deepseek-src-translate-ts:
-  en: c1fbb671592b79bb
-  zh: ce0cfce36c6d8d5a
-/deepseek-harness-distiller/files-changed-in-the-original-source/3-packages-shell-tool-bash-src-index-ts:
-  en: c7d41c6d15fe7b0a
-  zh: 6002f5a459ba7dfc
-/deepseek-harness-distiller/files-changed-in-the-original-source/4-packages-shell-tool-pwsh-src-index-ts:
-  en: 1335c19ffab2160c
-  zh: 32a7cc99d1546437
-/deepseek-harness-distiller/files-changed-in-the-original-source/5-packages-boot-app-boot-src-index-ts:
-  en: c01e53f0223b2704
-  zh: fc962ed6d91bbf11
-/deepseek-harness-distiller/files-changed-in-the-original-source/6-packages-boot-app-boot-src-profile-ts:
-  en: fbceea71a0c1c419
-  zh: 1b663b522d892666
-/deepseek-harness-distiller/files-changed-in-the-original-source/generated-files:
-  en: 159f75a04c049927
-  zh: 29d17ddc2b53828e
-/deepseek-harness-distiller/why-these-could-not-be-avoided:
-  en: bc737517615f94e5
-  zh: f44f1111e0004ad4
-/deepseek-harness-distiller/what-was-added:
-  en: fafebc6548e45477
-  zh: 419cfc964040f6ac
-/deepseek-harness-distiller/what-was-added/five-packages:
-  en: 40bf60f5ce7e7f1d
-  zh: b6cc4607de9de9f6
-/deepseek-harness-distiller/what-was-added/one-application:
-  en: 4e9cd7b8932c381d
-  zh: 7c9e722abe21ff31
-/deepseek-harness-distiller/what-was-added/documentation:
-  en: dd35966d29678d01
-  zh: 5dd194657562a2cd
-/deepseek-harness-distiller/verification:
-  en: 560db9e19b0adebd
-  zh: ba968d8af0d26b14
+  en: 762a6b920646e27f
+  zh: 5c1fe8a0126a351b
+/deepseek-harness-distiller/what-you-need:
+  en: 23f8f0f98e21274a
+  zh: e3d26dc143473f7d
 /deepseek-harness-distiller/run:
-  en: 928fdabf0711181f
-  zh: c2de1c4026e4ec4c
+  en: 4e0248e4c6474fc6
+  zh: 5491f0aa70750247
 /deepseek-harness-distiller/run/run-from-source:
-  en: a6463adf9d30e807
-  zh: 3365018771dca5b6
-/deepseek-harness-distiller/known-limitations:
-  en: 0069d2c6e7cb4926
-  zh: 4df266cae5d7370e
-/deepseek-harness-distiller/related-documents:
-  en: 0a8319f4f433ce8c
-  zh: fc40c90215ddbd6e
+  en: 4a90e28e5bc40ec8
+  zh: b8227f7ca019c99e
+/deepseek-harness-distiller/reading-the-result:
+  en: d72cb79db8c0768e
+  zh: 30b266b69a5fbdb6
+/deepseek-harness-distiller/the-task-file-line-by-line:
+  en: 4e146e40d485df36
+  zh: 8f2c839ef62c1e2c
+/deepseek-harness-distiller/the-task-file-line-by-line/prompt:
+  en: 443d6aafe25377c5
+  zh: 01bada09367b29de
+/deepseek-harness-distiller/the-task-file-line-by-line/workspace:
+  en: 141f8884c3686799
+  zh: 9efa37affdaa055b
+/deepseek-harness-distiller/the-task-file-line-by-line/evaluator:
+  en: 324748dcf22da393
+  zh: dc81c19f276f4af9
+/deepseek-harness-distiller/troubleshooting:
+  en: fda69c5a8ec75ec9
+  zh: 528ebe4daf35ab47
+/deepseek-harness-distiller/next-steps:
+  en: 588c1204d88070e4
+  zh: 485ae71cd4ebe06f
 /deepseek-harness-distiller/license:
   en: 12aeb392ac3a3537
   zh: 07a9593cbab202ab

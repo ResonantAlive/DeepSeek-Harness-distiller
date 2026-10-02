@@ -2,194 +2,293 @@
 
 English | [中文](README.zh.md)
 
-This project builds on DeepSeek Harness (dsh `0.2.0-rc.2`) and adds a teacher-model trajectory distillation layer: a strong model works on real tasks, the whole process is recorded, and the result is a labelled training dataset.
+A **teacher model** works on real tasks, every step it takes is recorded, and the result is a labelled training dataset for a future student model.
 
-This document covers one thing only: what we changed compared with the original.
+What gets recorded is the **process**, not just the final answer: what it saw → what it decided → which tool it called → what the tool returned → how it fixed things → how it finished.
 
-Every number below comes from git and can be checked directly. The baseline is the commit that imports the upstream release tree, so it is found by its message rather than named here:
+This guide takes you from nothing to your first completed task. About 10 minutes if you follow along.
 
-```bash
-BASE=$(git log --format=%H --grep='pristine dsh' --max-count=1)
-git log --oneline "$BASE..HEAD"
-git diff --shortstat "$BASE..HEAD"
-git diff --name-status "$BASE..HEAD"
-```
+## What you need
 
-## Summary
-
-We touched 6 files of the original hand-written source, about 120 lines, all additions. Nothing was deleted and no existing behavior changed. Everything else is new packages, a new application, and tests.
-
-That baseline is the `0.2.0-rc.2` release tree, 14,104 files. Since then there are 33 commits changing 104 files, 73 of them new (including 13 test files). Two more files are generated artifacts that a generator run refreshes, so nobody edits them by hand.
-
-## Files changed in the original source
-
-Changing core code carries risk, so each file is described below.
-
-### 1. `packages/llm/llm/src/types.ts`
-
-The `usage` chunk of the streaming protocol gained one optional field, `servedModel`:
-
-```diff
-- | { type: 'usage'; usage: TokenUsage }
-+ | {
-+   type: 'usage'
-+   usage: TokenUsage
-+   servedModel?: string
-+ }
-```
-
-The model named in a request is not always the model that answered; an alias or a routed deployment can differ. A dataset that has to say which model produced a trajectory needs this recorded.
-
-### 2. `packages/llm/llm-deepseek/src/translate.ts`
-
-The original discarded `message.model` while parsing a response. We read it and pass it up through the field above:
-
-```diff
-+ let servedModel: string | undefined
-- updateUsage(usage, object(event.message).usage)
-+ const message = object(event.message)
-+ updateUsage(usage, message.usage)
-+ if (typeof message.model === 'string' && message.model.length > 0) servedModel = message.model
-- yield { type: 'usage', usage }
-+ yield { type: 'usage', usage, ...servedModel === undefined ? {} : { servedModel } }
-```
-
-Only the adapter layer can see this, so it has to change here.
-
-### 3. `packages/shell/tool-bash/src/index.ts`
-
-The bash tool gained a `presentationMeta` projection that writes the command's structured result into the tool result's metadata, which the model never sees:
-
-```
-shell, command, workdir, exit_code, signal,
-timed_out, aborted, timeout_ms, stdout, stderr
-```
-
-What the model reads is one merged text block: stdout and stderr mixed together, the exit code only a marker inside the text. That form is written for a reader. A dataset needs what a machine can use directly: the exit code, the two streams apart, and whether a signal ended the command.
-
-`ToolResult.meta` is a field the framework already has. Its documentation states it is persisted verbatim on `tool/result` and that it is not part of the model-visible content. So this change does not affect model input and does not move snapshot tests.
-
-### 4. `packages/shell/tool-pwsh/src/index.ts`
-
-The same change as above. A real-API test is what showed that both tools need it: on Windows the model runs `pwsh`, not `bash`. Changing only `tool-bash` would leave this information empty on every Windows machine.
-
-### 5. `packages/boot/app-boot/src/index.ts`
-
-`distill-teacher-lock` joined the list of entries that must start successfully:
-
-```diff
-+ // A composition that mounts the teacher lock must not start when the lock
-+ // refuses it, or a run would record trajectories attributed to the wrong model.
-+ 'distill-teacher-lock',
-```
-
-Without this line the application keeps running after the teacher lock refuses, and the run records an entire trajectory attributed to the wrong model. We want a misconfiguration to stop with an error rather than pass silently.
-
-### 6. `packages/boot/app-boot/src/profile.ts`
-
-A new profile is registered so that `dsh --profile distill` can start:
-
-```diff
-+ distill: { bundles: ['@deepseek-ai/dsh-base'] },
-```
-
-### Generated files
-
-- `packages/extensions/tool-cordis/src/api-catalog.ts`: the Cordis service catalog, which the new `ctx.distillCapture` is generated into
-- `packages/preset/agent-preset/skills/cordis-composition-reference/references/packages.md`: the plugin package list, for the same reason
-
-Beyond those, the root `package.json` gained one script that starts the distillation application:
-
-```diff
-+ "distill": "node --import tsx/esm apps/distill/src/bin.ts",
-```
-
-## Why these could not be avoided
-
-- Only the adapter knows `served_model`; `message.model` is dropped inside `translate.ts` and is unavailable anywhere else.
-- Only the shell tool knows how a command ended; from outside, all that survives is merged text.
-- The teacher lock needs startup assembly to guarantee "refuse means stop", which is exactly what `requiredStartupEntryIds` is for. A normal plugin cannot do it.
-
-Every other capability is implemented as a new plugin. Nothing else in the original was changed.
-
-## What was added
-
-### Five packages
-
-Five packages were added under `packages/distill/`:
-
-| Package | What it does |
+| You need | Notes |
 |---|---|
-| `redaction` | Replaces secret values with placeholders before anything reaches disk: raw events, blobs, trajectories, and archived sessions |
-| `teacher-lock` | Refuses at load time any composition that could serve a model other than the locked teacher |
-| `trajectory-events` | Subscribes to session and stream events and writes a redacted raw event log plus content-addressed blobs |
-| `distill` | Loads task definitions, runs independent attempts, judges them objectively, and writes the labelled dataset |
-| `resource` | Detects the CPU and memory a container actually allows, and refuses a partitioning that does not fit |
-
-### One application
-
-`apps/distill/` is the application that drives the whole pipeline:
-
-- `composition.ts`: assembled through the Cordis Loader (`loadProfile` + `createRuntimeResolution` + `PluginPackages` + `boot`), not hand-written `ctx.plugin(...)` calls
-- `agent-runner.ts`: the production `AgentRunner`, creating the session, sending the message, waiting for idle with a deadline, and flushing to disk
-- `bin.ts`: the command-line entry point, handling arguments, rate limiting, and resource validation before running tasks one by one
-
-There is also a real-API test (`tests/real-agent.spec.ts`) that skips itself when no key is configured.
-
-### Documentation
-
-- [`docs/subsystems/distill.md`](docs/subsystems/distill.md): the distillation subsystem reference, covering the capture contract, the trajectory document, the dataset buckets, and host partitioning
-- [`docs/persistence-changes/2026-10-02-served-model-optional.md`](docs/persistence-changes/2026-10-02-served-model-optional.md): the bilingual acknowledgement record for the persistence-type change
-
-## Verification
-
-| Item | Result |
-|---|---|
-| `pnpm run doc-sync` documentation gates | 43 / 43 passing |
-| Coverage of the five new packages (100% per file) | 5 / 5 passing |
-| Unit tests for the new packages and application | 355 passing |
-| Real-API end to end | 3 / 3 passing |
-| `tsc -b tsconfig.host.json` | exit code 0 |
-| `packages/shell/tool-pwsh` own test suite | 100 passing |
-
-The three real-API cases are: a judged success, a judgement that can never pass, and a run that exceeds its budget. All three ran against real credentials; they skip themselves when no key is present.
+| **Node.js** | Version `^22.19` or `>=24`. Check with `node -v` |
+| **pnpm** | The package manager. `pnpm -v` printing a version is enough |
+| **A DeepSeek API key** | Get one from [platform.deepseek.com](https://platform.deepseek.com). It looks like `sk-...` |
+| **Disk space** | About 3 GB (dependencies come to a little over 2 GB) |
 
 ## Run
 
-The application runs the built artifacts in `lib/`. After editing `src/`, rebuild first or the real path will not see the change:
+### Run from source
+
+**Step 1: Get the code and install dependencies**
+
+```bash
+git clone https://github.com/ResonantAlive/DeepSeek-Harness-distiller.git
+cd DeepSeek-Harness-distiller
+pnpm install
+```
+
+`pnpm install` takes a few minutes. That is normal.
+
+**Step 2: Build**
 
 ```bash
 pnpm run build:lib:host
 ```
 
-### Run from source
+⚠️ **Do not skip this.** The application runs the built artifacts in `lib/`, not the sources in `src/`. **Editing source without rebuilding changes nothing at runtime** — this is the easiest trap to fall into.
+
+**Step 3: Configure your key**
+
+Create a `.env` file in the project root:
 
 ```bash
-pnpm install
-
-node node_modules/vitest/vitest.mjs run packages/distill
-
-node node_modules/vitest/vitest.mjs run packages/distill/distill \
-  --coverage --coverage.include='packages/distill/distill/src/**'
-
-pnpm run doc-sync
-
-DEEPSEEK_API_KEY=<key> node node_modules/vitest/vitest.mjs run apps/distill/tests/real-agent.spec.ts
+DEEPSEEK_API_KEY=sk-your-key-here
 ```
 
-## Known limitations
+⚠️ **Do not set `DEEPSEEK_BASE_URL`.** The default is correct (`https://api.deepseek.com/anthropic`). Pointing it at the bare hostname selects the wrong protocol and the error is hard to read.
 
-- **`tool-bash`'s own tests do not run on our development machine.** `packages/shell/tool-bash/tests/**` is excluded from vitest there (the machine is Windows and has no bash). That change is currently covered only by its type contract and by its callers' tests; the full suite needs Linux.
-- **The evaluator has no separate sandbox.** It runs in the same process as the runner. Tampering is caught by comparing fingerprints taken before and after the attempt, but there is no process isolation.
-- **The `thinking` switch is not recorded.** It lives in the adapter's wire format, not in `LlmCallConfig`. The trajectory records `reasoning_available` instead: whether reasoning content actually came back.
-- **Not done yet:** redacting and destroying session logs, crash recovery, and a configuration precedence chain.
+`.env` is already in `.gitignore`, so it will not be committed.
 
-## Related documents
+**Step 4: Write your first task**
 
-- [Distillation subsystem reference](docs/subsystems/distill.md): the capture service, what an attempt records, the dataset buckets, and host partitioning
-- [Persistence-type change record](docs/persistence-changes/2026-10-02-served-model-optional.md): the compatibility note for the `servedModel` field
-- [Safety notice](SAFETY.md): read this before running the project
-- [Contributing](CONTRIBUTING.md)
+A corpus looks like this. Three folders, each with one job:
+
+```
+my-corpus/
+├── tasks/
+│   ├── manifest.yml
+│   └── T01.yml
+├── templates/
+│   └── hello/
+│       └── README.md
+└── evaluator/
+```
+
+- `tasks/manifest.yml` — the task list
+- `tasks/T01.yml` — one task: the prompt and how to judge it
+- `templates/hello/` — the starting workspace, **copied fresh for every attempt**
+- `evaluator/` — hidden files for judging, **invisible to the model** (unused in this example)
+
+`tasks/T01.yml`:
+
+```yaml
+version: 1
+task_id: T01
+prompt: |
+  Create a file named hello.txt in the current directory.
+  Its contents must be exactly the single word: hello
+  Then you are done. Do not explain.
+workspace:
+  template: hello
+evaluator:
+  kind: test_command
+  command:
+    - node
+    - -e
+    - "process.exit(require('node:fs').readFileSync('../workspace/hello.txt','utf8').trim()==='hello'?0:1)"
+```
+
+`tasks/manifest.yml`:
+
+```yaml
+version: 1
+tasks:
+  - file: T01.yml
+```
+
+Put any file in `templates/hello/`:
+
+```bash
+mkdir -p my-corpus/templates/hello
+echo "A scratch workspace." > my-corpus/templates/hello/README.md
+```
+
+⚠️ **Notice the `../workspace/` in the evaluator command.** The evaluator's working directory is `evaluator/`, **not** the workspace. To read a file the model produced, go up one level and into `workspace/`. Writing plain `hello.txt` makes every attempt fail.
+
+**Step 5: Run it**
+
+```bash
+pnpm run distill --manifest my-corpus/tasks/manifest.yml --out my-corpus/dataset --templates my-corpus/templates
+```
+
+The three arguments are the task list, the output directory, and the templates directory. `--evaluators` is only needed when you use hidden judging files.
+
+A run looks like this:
+
+```
+host: 8 CPU (os), 24128 MB (os)
+T01: SUCCESS attempts=1 -> success/T01
+```
+
+The first line reports the machine resources that were detected. The second is the outcome: **the task succeeded, how many attempts it took, and where it was written**.
+
+## Reading the result
+
+After a run, `my-corpus/dataset/` looks like this:
+
+```
+dataset/
+├── index.jsonl
+├── success/
+│   └── T01/
+│       └── trajectory.json
+├── abandoned/
+├── invalid/
+└── failed/
+    └── T01/
+        ├── attempt_001/trajectory.json
+        └── attempt_002/trajectory.json
+```
+
+- `index.jsonl` — one line per task, the whole index
+- `success/` — tasks that were judged successful
+- `abandoned/` — retries exhausted without success
+- `invalid/` — could not be judged (a broken evaluator, say)
+- `failed/` — **every failed attempt, archived on its own** (the task itself may be in another bucket)
+
+Open `success/T01/trajectory.json` and you get the full record of one attempt:
+
+- `teacher` — which model did the work, including `served_model`, the model that **actually** served it
+- `trajectory[]` — the process step by step: `observations` (what it saw), `decision` (what it decided), `actions` (which tools it called)
+- `artifacts` — which files changed, and **what changed inside them** (a unified diff)
+- `evaluation` — the judgement and its reason
+
+**Both successes and failures are kept.** Failures are not waste — a student model learns from "this did not work" just as much.
+
+## The task file, line by line
+
+### prompt
+
+Describe in plain language what to do. **Describe a result that can be checked, not a method to follow.**
+
+```yaml
+prompt: Refactor this function to use async/await
+```
+
+That one is hard to judge. Replace it with something like:
+
+```yaml
+prompt: Make load() return a Promise that resolves to the parsed data
+```
+
+The reason: a requirement you cannot write a check for is one the model cannot get right either — neither side knows what "done" looks like.
+
+### workspace
+
+```yaml
+workspace:
+  template: hello
+```
+
+`template` names a folder under `templates/`. **Every attempt gets a fresh copy**, so nothing carries over from the previous one.
+
+You can also seed extra files:
+
+```yaml
+workspace:
+  template: hello
+  seed_files:
+    - path: data/input.txt
+      content: |
+        listen
+```
+
+### evaluator
+
+**Judging never asks the model whether it finished.** It runs a command and looks at the result.
+
+```yaml
+evaluator:
+  kind: test_command
+  command: [node, -e, "..."]
+  timeout_ms: 60000
+  expect_exit_code: 0
+  assets: [verify.mjs]
+```
+
+| Field | Meaning |
+|---|---|
+| `kind` | `test_command` / `hidden_test` / `artifact_check` |
+| `command` | A non-empty array of strings. **Exit code 0 passes, anything else fails** |
+| `timeout_ms` | Optional. A timeout is recorded as an infrastructure fault, **not the model's fault** |
+| `expect_exit_code` | Optional, 0 by default |
+| `assets` | Optional. Hidden files copied in from `evaluator/T01/` |
+| `expect_stdout_contains` | Optional. The output must contain this string |
+
+Three common patterns:
+
+| What you want to check | How to write it |
+|---|---|
+| Whether a file has the right contents | `node -e` reading the file and comparing |
+| Whether the code works | run the test suite and read the exit code |
+| Whether the result is correct | run a verification script |
+
+**For anything more involved**, put the script at `evaluator/T01/verify.mjs` and pull it in with `assets`. The model **cannot see** that file, so it cannot edit the check to make itself pass.
+
+```yaml
+evaluator:
+  kind: hidden_test
+  command: [node, verify.mjs]
+  assets: [verify.mjs]
+```
+
+Inside a verification script, reach the workspace through `../workspace/` as well:
+
+```js
+const ws = new URL('../workspace/', import.meta.url)
+const out = readFileSync(new URL('hello.txt', ws), 'utf8').trim()
+if (out !== 'hello') {
+  console.error(`hello.txt contains ${JSON.stringify(out)}, expected "hello"`)
+  process.exit(1)
+}
+```
+
+**Whatever you write to `console.error` is stored in the dataset.** Write the reason clearly and you will understand the failure months later without re-running anything.
+
+## Troubleshooting
+
+**Q: I changed the code and nothing happened.**
+
+Rebuild: `pnpm run build:lib:host`. The application runs `lib/`, not `src/`.
+
+**Q: Everything ends up ABANDONED even though the model clearly did the work.**
+
+Almost always a wrong path in the evaluator. Its working directory is `evaluator/`; the workspace is at `../workspace/`.
+
+Look at `evaluation.entries[].stderr` inside `dataset/failed/T01/attempt_001/trajectory.json` — the failure reason is written there.
+
+**Q: I get an error about the key.**
+
+Check three things: the variable in `.env` is named `DEEPSEEK_API_KEY`; `DEEPSEEK_BASE_URL` is **not** set; and the key has not expired.
+
+**Q: How do I run just one task?**
+
+```bash
+pnpm run distill --manifest my-corpus/tasks/manifest.yml --out my-corpus/dataset --templates my-corpus/templates --task T01
+```
+
+**Q: I want to run many tasks at once. How do I control concurrency?**
+
+```bash
+pnpm run distill --manifest my-corpus/tasks/manifest.yml --out my-corpus/dataset --templates my-corpus/templates --max-concurrent-tasks 4
+```
+
+The program detects the machine's real resources first (inside a container it reads the cgroup limits, which are smaller than the machine's stated figures). **A concurrency plan the host cannot hold is refused at startup** rather than being killed partway through.
+
+**Q: A run is too slow.**
+
+Tune `--attempt-timeout-ms` (the per-attempt deadline) and `--max-concurrent-tasks`. A task definition can also cap the steps and tokens of a single attempt.
+
+## Next steps
+
+**Writing the checks is the core work, and it is the part that takes the longest.** A few things learned the hard way:
+
+1. **Write the check before the prompt.** If you cannot write a check for a requirement, leave it out of the prompt.
+2. **Cover behaviours, not inputs.** An infinite input space usually maps to six or seven behaviours; one representative each is enough.
+3. **Boundaries are where bugs hide**: empty arrays, a single element, the first and last page, exact multiples, zero and negatives, Chinese text and emoji.
+4. **Keep formatting and style out of the checks.** Otherwise the model fails for reasons unrelated to the task, and the labels get noisy.
 
 ## License
 

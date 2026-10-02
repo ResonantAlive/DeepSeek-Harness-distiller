@@ -2,196 +2,296 @@
 
 [English](README.md) | 中文
 
-这个项目基于 DeepSeek-Harness（dsh `0.2.0-rc.2`），在上面加了一套教师模型轨迹蒸馏的功能：让强模型去真实任务里干活，把过程录下来，最后得到一份带标签的训练数据集。
+让**教师模型**去真实任务里干活，把它做题的**每一步**录下来，最后得到一份带标签的训练数据集 —— 给将来训练学生模型用。
 
-这份文档只讲一件事：跟原版比，我们动了哪些地方。
+录的不是只有最终答案，而是**过程**：看到什么 → 想了什么 → 调了什么工具 → 工具返回什么 → 怎么改 → 怎么收尾。
 
-文中的数字都是从 git 里取的，可以自己核对。基线是导入上游发布树的那次提交，所以这里用提交信息来找它，而不写死标识符：
+这份文档带你从头跑通第一个任务。跟着做大约 10 分钟。
 
-```bash
-BASE=$(git log --format=%H --grep='pristine dsh' --max-count=1)
-git log --oneline "$BASE..HEAD"
-git diff --shortstat "$BASE..HEAD"
-git diff --name-status "$BASE..HEAD"
-```
+## 你需要准备什么
 
-## 先说结论
-
-原版的手写源码一共只动了 6 个文件，大约 120 行，全部是新增，没有删除，也没有改变原来的行为。剩下的内容都是新包、新应用和测试。
-
-那条基线就是 0.2.0-rc.2 的发布树，14,104 个文件。之后共 33 次提交，改动 104 个文件，其中 73 个是新增（包含 13 个测试文件）。另外有 2 个文件是生成产物，重跑生成器就行，不用手改。
-
-## 动了原版的 6 个文件
-
-改核心代码有风险，所以这部分逐个说明。
-
-### 1. `packages/llm/llm/src/types.ts`
-
-流式协议里的 `usage` 分片多了一个可选字段 `servedModel`：
-
-```diff
-- | { type: 'usage'; usage: TokenUsage }
-+ | {
-+   type: 'usage'
-+   usage: TokenUsage
-+   servedModel?: string
-+ }
-```
-
-请求里写的模型名，和实际响应的模型不一定是同一个，别名、路由部署都可能造成差别。数据集要说清楚轨迹是谁产出的，就得把这个记下来。
-
-### 2. `packages/llm/llm-deepseek/src/translate.ts`
-
-原版在解析响应时把 `message.model` 丢掉了。我们把它读出来，通过上面那个字段往上传：
-
-```diff
-+ let servedModel: string | undefined
-- updateUsage(usage, object(event.message).usage)
-+ const message = object(event.message)
-+ updateUsage(usage, message.usage)
-+ if (typeof message.model === 'string' && message.model.length > 0) servedModel = message.model
-- yield { type: 'usage', usage }
-+ yield { type: 'usage', usage, ...servedModel === undefined ? {} : { servedModel } }
-```
-
-这个信息只有适配器这一层拿得到，插件层看不到，所以只能在这里改。
-
-### 3. `packages/shell/tool-bash/src/index.ts`
-
-给 bash 工具加了一个 `presentationMeta`，把命令的结构化结果写进工具结果的元数据里，模型看不到这部分：
-
-```
-shell, command, workdir, exit_code, signal,
-timed_out, aborted, timeout_ms, stdout, stderr
-```
-
-模型看到的是合并后的一段文本，stdout 和 stderr 混在一起，退出码只是文本里的一个标记，这是给人读的。数据集需要的是机器能直接用的东西：退出码、分开的两个流、是不是被信号杀掉的。
-
-`ToolResult.meta` 是框架本来就有的字段，文档里写明会原样存进 `tool/result`，也不在模型可见的内容里。所以这处改动不会影响模型输入，也不会让快照测试变化。
-
-### 4. `packages/shell/tool-pwsh/src/index.ts`
-
-和上一条同样的改动。两个工具都要改，是跑真实 API 测试时发现的：在 Windows 上模型用的是 `pwsh`，不是 `bash`。如果只改 `tool-bash`，Windows 机器上这部分信息就全是空的。
-
-### 5. `packages/boot/app-boot/src/index.ts`
-
-把 `distill-teacher-lock` 加进了「必须启动成功」的名单：
-
-```diff
-+ // A composition that mounts the teacher lock must not start when the lock
-+ // refuses it, or a run would record trajectories attributed to the wrong model.
-+ 'distill-teacher-lock',
-```
-
-如果没有这一条，教师锁拒绝启动之后应用还会继续跑，最后录出一整份归属错误的轨迹。我们希望配置有问题时直接报错停下来，而不是悄悄跳过。
-
-### 6. `packages/boot/app-boot/src/profile.ts`
-
-注册一个新 profile，这样才能用 `dsh --profile distill` 启动：
-
-```diff
-+ distill: { bundles: ['@deepseek-ai/dsh-base'] },
-```
-
-### 生成产物
-
-- `packages/extensions/tool-cordis/src/api-catalog.ts`：Cordis 服务目录，新增的 `ctx.distillCapture` 会被生成进去
-- `packages/preset/agent-preset/skills/cordis-composition-reference/references/packages.md`：插件包清单，同理
-
-除了上面这些，根 `package.json` 加了一条脚本，用来启动蒸馏应用：
-
-```diff
-+ "distill": "node --import tsx/esm apps/distill/src/bin.ts",
-```
-
-## 为什么这几处没法绕开
-
-- `served_model` 只有适配器知道，`message.model` 在 `translate.ts` 里就被丢了，别的地方拿不到。
-- 命令的结束状态只有 shell 工具自己清楚，从外面只能拿到合并后的文本。
-- 教师锁要靠启动装配来保证「拒绝就停机」，这正是 `requiredStartupEntryIds` 的用途，放在普通插件里做不到。
-
-除此之外的功能，全部是通过新增插件实现的，没有再改原版。
-
-## 新增的部分
-
-### 五个包
-
-`packages/distill/` 下新增了五个包：
-
-| 包 | 做什么 |
+| 需要 | 说明 |
 |---|---|
-| `redaction` | 落盘之前把密钥换成占位符，覆盖原文、blob、轨迹和归档会话 |
-| `teacher-lock` | 加载时就拒绝可能服务到非锁定模型的组合 |
-| `trajectory-events` | 订阅会话和流事件，写出脱敏后的原始事件日志，以及按内容寻址的 blob |
-| `distill` | 读取任务定义，跑相互独立的尝试，客观判定结果，写出带标签的数据集 |
-| `resource` | 探测容器实际允许的 CPU 和内存，装不下的切分方案直接拒绝 |
-
-### 一个应用
-
-`apps/distill/` 是驱动整个流程的应用：
-
-- `composition.ts`：通过 Cordis Loader 组装（`loadProfile` + `createRuntimeResolution` + `PluginPackages` + `boot`），没有手写 `ctx.plugin(...)`
-- `agent-runner.ts`：生产用的 `AgentRunner`，负责建会话、发消息、等空闲（带超时）、落盘
-- `bin.ts`：命令行入口，处理参数、限流、资源校验，然后逐个任务执行
-
-另外有一个真实 API 测试（`tests/real-agent.spec.ts`），没配密钥时会自动跳过。
-
-### 文档
-
-- [`docs/subsystems/distill.zh.md`](docs/subsystems/distill.zh.md)：蒸馏子系统的参考页，讲捕获服务的约定、轨迹文档、数据集分桶和主机切分
-- [`docs/persistence-changes/2026-10-02-served-model-optional.zh.md`](docs/persistence-changes/2026-10-02-served-model-optional.zh.md)：持久化类型变更的双语确认记录
-
-## 验证情况
-
-| 项目 | 结果 |
-|---|---|
-| `pnpm run doc-sync` 文档检查 | 43 / 43 通过 |
-| 五个新包的覆盖率（每个文件 100%） | 5 / 5 通过 |
-| 新增包和应用的单测 | 355 个通过 |
-| 真实 API 端到端 | 3 / 3 通过 |
-| `tsc -b tsconfig.host.json` | 退出码 0 |
-| `packages/shell/tool-pwsh` 自带测试 | 100 个通过 |
-
-真实 API 的三个用例分别是：判定成功、判定永远不通过、超出预算。三个都用真实凭据跑过，没有密钥时会自动跳过。
+| **Node.js** | 版本要 `^22.19` 或 `>=24`。跑 `node -v` 看一下 |
+| **pnpm** | 包管理器。`pnpm -v` 能出版本号就行 |
+| **DeepSeek API 密钥** | 从 [platform.deepseek.com](https://platform.deepseek.com) 申请，形如 `sk-...` |
+| **磁盘空间** | 大约 3 GB（依赖装完 2 GB 出头） |
 
 <a id="run"></a>
 ## 运行
 
-应用实际跑的是 `lib/` 里的构建产物。改了 `src/` 之后要先重新构建，真实链路里才能看到改动：
+<a id="run-from-source"></a>
+
+### 从源码运行
+
+**第 1 步：拿到代码并装依赖**
+
+```bash
+git clone https://github.com/ResonantAlive/DeepSeek-Harness-distiller.git
+cd DeepSeek-Harness-distiller
+pnpm install
+```
+
+`pnpm install` 会跑几分钟，正常。
+
+**第 2 步：构建**
 
 ```bash
 pnpm run build:lib:host
 ```
 
-<a id="run-from-source"></a>
-### 从源码运行
+⚠️ **这一步不能省。** 应用跑的是构建出来的 `lib/` 产物，不是 `src/` 里的源码。**改了源码不重新构建，运行结果不会变** —— 这是最容易踩的坑。
+
+**第 3 步：配置密钥**
+
+在项目根目录建一个 `.env` 文件：
 
 ```bash
-pnpm install
-
-node node_modules/vitest/vitest.mjs run packages/distill
-
-node node_modules/vitest/vitest.mjs run packages/distill/distill \
-  --coverage --coverage.include='packages/distill/distill/src/**'
-
-pnpm run doc-sync
-
-DEEPSEEK_API_KEY=<key> node node_modules/vitest/vitest.mjs run apps/distill/tests/real-agent.spec.ts
+DEEPSEEK_API_KEY=sk-your-key-here
 ```
 
-## 已知的限制
+⚠️ **不要设置 `DEEPSEEK_BASE_URL`。** 默认值就是对的（`https://api.deepseek.com/anthropic`）。填成裸域名会走错接口协议，报错很难看懂。
 
-- **`tool-bash` 自带的测试在我们的开发机上跑不了。** `packages/shell/tool-bash/tests/**` 被排在 vitest 之外（开发机是 Windows，没有 bash）。这部分改动目前只靠类型约束和调用方的测试覆盖，完整的测试需要在 Linux 上跑。
-- **判据没有独立沙箱。** 评估器和 runner 在同一个进程里。防作弊靠运行前后比对指纹，能发现被改动，但做不到进程隔离。
-- **`thinking` 开关没有记录。** 它在适配器的线格式里，不在 `LlmCallConfig` 里。轨迹里记的是 `reasoning_available`，也就是实际有没有拿到思考内容。
-- **还没做的：** 会话日志的脱敏销毁、崩溃恢复、配置优先级链。
+`.env` 已经在 `.gitignore` 里，不会被提交上去。
 
-## 相关文档
+**第 4 步：写第一个任务**
 
-- [蒸馏子系统参考](docs/subsystems/distill.zh.md)：捕获服务、一次尝试记录的内容、数据集分桶和主机切分
-- [持久化类型变更记录](docs/persistence-changes/2026-10-02-served-model-optional.zh.md)：`servedModel` 字段的兼容性说明
-- [安全说明](SAFETY.zh.md)：运行本项目前请先阅读
-- [参与贡献](CONTRIBUTING.zh.md)
+一个"语料"长这样，三个文件夹各管一件事：
+
+```
+my-corpus/
+├── tasks/
+│   ├── manifest.yml
+│   └── T01.yml
+├── templates/
+│   └── hello/
+│       └── README.md
+└── evaluator/
+```
+
+- `tasks/manifest.yml` —— 任务清单
+- `tasks/T01.yml` —— 一个任务：题目 + 怎么判卷
+- `templates/hello/` —— 初始工作区，**每次尝试都从这儿复制一份干净的**
+- `evaluator/` —— 判卷用的隐藏文件，**模型看不到**（这个例子用不上）
+
+`tasks/T01.yml` 的内容：
+
+```yaml
+version: 1
+task_id: T01
+prompt: |
+  Create a file named hello.txt in the current directory.
+  Its contents must be exactly the single word: hello
+  Then you are done. Do not explain.
+workspace:
+  template: hello
+evaluator:
+  kind: test_command
+  command:
+    - node
+    - -e
+    - "process.exit(require('node:fs').readFileSync('../workspace/hello.txt','utf8').trim()==='hello'?0:1)"
+```
+
+`tasks/manifest.yml` 的内容：
+
+```yaml
+version: 1
+tasks:
+  - file: T01.yml
+```
+
+`templates/hello/` 里随便放一个文件：
+
+```bash
+mkdir -p my-corpus/templates/hello
+echo "A scratch workspace." > my-corpus/templates/hello/README.md
+```
+
+⚠️ **注意判卷命令里的 `../workspace/`。** 判卷程序的运行目录是 `evaluator/`，**不是**工作区。要读模型产出的文件，得先往上走一层再进 `workspace/`。写成 `hello.txt` 会一直判失败。
+
+**第 5 步：开始运行**
+
+```bash
+pnpm run distill --manifest my-corpus/tasks/manifest.yml --out my-corpus/dataset --templates my-corpus/templates
+```
+
+三个参数分别是：任务清单、结果输出目录、模板目录。`--evaluators` 只有用到隐藏判卷文件时才需要。
+
+跑起来大概长这样：
+
+```
+host: 8 CPU (os), 24128 MB (os)
+T01: SUCCESS attempts=1 -> success/T01
+```
+
+第一行是探测到的机器资源。第二行是结果：**任务成功，用了几次尝试，存到哪个目录**。
+
+## 看结果
+
+跑完 `my-corpus/dataset/` 里会是这样：
+
+```
+dataset/
+├── index.jsonl
+├── success/
+│   └── T01/
+│       └── trajectory.json
+├── abandoned/
+├── invalid/
+└── failed/
+    └── T01/
+        ├── attempt_001/trajectory.json
+        └── attempt_002/trajectory.json
+```
+
+- `index.jsonl` —— 所有任务的索引，每行一条
+- `success/` —— 判成功的任务
+- `abandoned/` —— 重试用完还是没成功的
+- `invalid/` —— 判不了的（比如判卷程序坏了）
+- `failed/` —— **每次失败的尝试，单独归档**（任务本身可能在别的桶里）
+
+打开 `success/T01/trajectory.json`，里面是一次尝试的完整记录：
+
+- `teacher` —— 是哪个模型干的（含 `served_model`，也就是**实际**服务的模型）
+- `trajectory[]` —— 一步一步的过程，每步有 `observations`（看到什么）、`decision`（想了什么）、`actions`（调了什么工具）
+- `artifacts` —— 改了哪些文件，以及**文件内部改了什么**（统一 diff）
+- `evaluation` —— 判卷结果和原因
+
+**关键点：成功和失败的数据都保留。** 失败不是垃圾 —— 学生模型正是从"这样做不行"里学到东西的。
+
+## 任务文件详解
+
+### prompt：题目
+
+用自然语言说清楚要干什么。**要描述"可检查的结果"，不要描述"做法"。**
+
+```yaml
+prompt: Refactor this function to use async/await
+```
+
+上面这种不好判。换成下面这种：
+
+```yaml
+prompt: Make load() return a Promise that resolves to the parsed data
+```
+
+原因：你写不出判据的要求，模型也做不对 —— 因为双方都不知道"做对了"长什么样。
+
+### workspace：初始工作区
+
+```yaml
+workspace:
+  template: hello
+```
+
+`template` 指向 `templates/` 下的哪个文件夹。**每次尝试都会重新复制一份干净的**，上一次的改动不会带到下一次。
+
+也可以额外塞文件进去：
+
+```yaml
+workspace:
+  template: hello
+  seed_files:
+    - path: data/input.txt
+      content: |
+        listen
+```
+
+### evaluator：怎么判卷
+
+**判卷绝不去问模型"你做完了吗"** —— 而是真的去跑命令、看结果。
+
+```yaml
+evaluator:
+  kind: test_command
+  command: [node, -e, "..."]
+  timeout_ms: 60000
+  expect_exit_code: 0
+  assets: [verify.mjs]
+```
+
+| 字段 | 说明 |
+|---|---|
+| `kind` | `test_command` / `hidden_test` / `artifact_check` |
+| `command` | 非空字符串数组。**退出码 0 = 通过，非 0 = 失败** |
+| `timeout_ms` | 可选。超时后会记为基础设施故障，**不算模型的错** |
+| `expect_exit_code` | 可选，默认就是 0 |
+| `assets` | 可选。从 `evaluator/T01/` 拷进来的隐藏文件 |
+| `expect_stdout_contains` | 可选。输出里必须含这个字符串 |
+
+三种固定套路：
+
+| 想判什么 | 怎么写 |
+|---|---|
+| 文件内容对不对 | `node -e` 读文件比对 |
+| 代码能不能跑 | 跑测试套件，看退出码 |
+| 结果对不对 | 跑一个校验脚本 |
+
+**要写复杂判据时**，把脚本放 `evaluator/T01/verify.mjs`，然后用 `assets` 引进来。这个文件**模型看不到**，所以模型没法改它来"让自己通过"。
+
+```yaml
+evaluator:
+  kind: hidden_test
+  command: [node, verify.mjs]
+  assets: [verify.mjs]
+```
+
+判据脚本里访问工作区，同样要写 `../workspace/`：
+
+```js
+const ws = new URL('../workspace/', import.meta.url)
+const out = readFileSync(new URL('hello.txt', ws), 'utf8').trim()
+if (out !== 'hello') {
+  console.error(`hello.txt contains ${JSON.stringify(out)}, expected "hello"`)
+  process.exit(1)
+}
+```
+
+**`console.error` 的内容会存进数据集。** 所以失败原因写清楚，以后看失败样本时一眼就知道为什么。
+
+## 常见问题
+
+**Q：改了代码没生效？**
+
+重新构建：`pnpm run build:lib:host`。应用跑的是 `lib/`，不是 `src/`。
+
+**Q：一直 ABANDONED，但模型明明做了？**
+
+八成是判卷路径写错了。判卷程序的运行目录是 `evaluator/`，工作区在 `../workspace/`。
+
+去 `dataset/failed/T01/attempt_001/trajectory.json` 里看 `evaluation.entries[].stderr`，失败原因就写在那儿。
+
+**Q：报密钥相关的错？**
+
+检查三点：`.env` 里变量名是 `DEEPSEEK_API_KEY`；**没有**设置 `DEEPSEEK_BASE_URL`；密钥没过期。
+
+**Q：怎么只跑其中一个任务？**
+
+```bash
+pnpm run distill --manifest my-corpus/tasks/manifest.yml --out my-corpus/dataset --templates my-corpus/templates --task T01
+```
+
+**Q：想一次跑很多任务，怎么控制并发？**
+
+```bash
+pnpm run distill --manifest my-corpus/tasks/manifest.yml --out my-corpus/dataset --templates my-corpus/templates --max-concurrent-tasks 4
+```
+
+程序会先探测机器实际资源（容器里会读 cgroup 限制，比机器标称值小），**装不下的并发方案会直接拒绝启动**，而不是跑到一半被系统杀掉。
+
+**Q：跑太慢了？**
+
+调 `--attempt-timeout-ms`（单次尝试的超时）和 `--max-concurrent-tasks`。另外任务定义里可以限制单次尝试的步数和 token。
+
+## 下一步
+
+**写判据是核心工作，也是最花时间的部分。** 几条经验：
+
+1. **先把判据写出来，再写 prompt。** 写不出判据的要求，就别放进 prompt。
+2. **只需要覆盖"行为"，不需要覆盖"所有输入"。** 无穷个输入通常只对应六七种行为，每种测一个代表就够。
+3. **边界是 bug 的藏身处**：空数组、单个元素、第一页和最后一页、正好整除、零和负数、中文和 emoji。
+4. **别把格式和风格放进判据。** 那会让模型因为跟任务无关的事被判失败，标签就脏了。
 
 ## 许可证
 
