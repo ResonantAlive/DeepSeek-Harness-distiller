@@ -3489,7 +3489,7 @@
       "kind": "event",
       "event": "assistant/attempt",
       "surface": false,
-      "digest": "15d5dfdd822aa35e115afd74a8982825a493880457774e6850bc1520b50875e4",
+      "digest": "7e460ceb73d9611a0be7475f036e22915ecf95f9d421f5676455989cc0e0b3ce",
       "schema": {
         "root": 0,
         "nodes": [
@@ -4266,6 +4266,11 @@
             "kind": "object",
             "properties": [
               {
+                "name": "servedModel",
+                "type": 7,
+                "optional": true
+              },
+              {
                 "name": "type",
                 "type": 66,
                 "optional": false
@@ -4404,7 +4409,7 @@
       "kind": "event",
       "event": "assistant/message",
       "surface": true,
-      "digest": "1033093edd0db80ff410e00830b523405e00bb0c7684948e531ff65095799625",
+      "digest": "3690108acc65338f2fe1ee2f54d1fadf957697d85dec38c37d8d3411ae9c6717",
       "schema": {
         "root": 0,
         "nodes": [
@@ -5264,6 +5269,11 @@
           {
             "kind": "object",
             "properties": [
+              {
+                "name": "servedModel",
+                "type": 7,
+                "optional": true
+              },
               {
                 "name": "type",
                 "type": 71,
@@ -22015,11 +22025,6 @@
       ]
     },
     {
-      "digest": "1033093edd0db80ff410e00830b523405e00bb0c7684948e531ff65095799625",
-      "names": [],
-      "sources": []
-    },
-    {
       "digest": "10e386801903f9d424602c31d3ff837a94aef623c8b391376d8d9e253525fabe",
       "names": [],
       "sources": []
@@ -22102,12 +22107,14 @@
       "sources": []
     },
     {
-      "digest": "1571525adc95a24e5d25b5a6440df401cd7cdd881b745178e85f5a333435cd1b",
+      "digest": "156b0f60cb34473e2e2d3ab45bd43f4ac336ddf140b3a9bb0483733a00ada6a7",
       "names": [],
-      "sources": []
+      "sources": [
+        "packages/core/session/src/types.ts:341"
+      ]
     },
     {
-      "digest": "15d5dfdd822aa35e115afd74a8982825a493880457774e6850bc1520b50875e4",
+      "digest": "1571525adc95a24e5d25b5a6440df401cd7cdd881b745178e85f5a333435cd1b",
       "names": [],
       "sources": []
     },
@@ -22216,13 +22223,6 @@
       "digest": "1c5a58f4599bd4a9711712551ffe2442a5e5fcd0758bafe630cc4ead850bdaa7",
       "names": [],
       "sources": []
-    },
-    {
-      "digest": "1ccb56061942f5ccb0d30c9e4f2883b9d115ff906560029de637b61d3cde896d",
-      "names": [],
-      "sources": [
-        "packages/core/session/src/types.ts:341"
-      ]
     },
     {
       "digest": "1cde1bedde79c5e8a56aee9c05c8e0a579cf5bc611deb85b93fa331a16ca978f",
@@ -22571,15 +22571,6 @@
       "sources": []
     },
     {
-      "digest": "33341aac09312300de5a178e6cc6f6544a4876f7f710cfea55eda473c8d329ef",
-      "names": [
-        "packages/llm/llm/src/assistant-stream.ts#AssistantStreamRecord"
-      ],
-      "sources": [
-        "packages/llm/llm/src/assistant-stream.ts:20"
-      ]
-    },
-    {
       "digest": "335e242de1fcc17b6ca920fc420d71bec2d76e53e37955c00948b65ab77f05c5",
       "names": [
         "packages/core/session/src/types.ts#SurfaceOp"
@@ -22589,12 +22580,22 @@
       ]
     },
     {
+      "digest": "33d671f70e8f86309b2f36d88846b2fd01d8f64f6d037c640f0916376058b2a2",
+      "names": [],
+      "sources": []
+    },
+    {
       "digest": "34d1ab5c5df378186d6054b1a1beea9a41e41965d6f336f0bc0025c441a82e66",
       "names": [],
       "sources": []
     },
     {
       "digest": "35203ba7ad5ef6f97d556b85df20ae98f04f09c65748cecdf8eefdb8b6405ffc",
+      "names": [],
+      "sources": []
+    },
+    {
+      "digest": "3690108acc65338f2fe1ee2f54d1fadf957697d85dec38c37d8d3411ae9c6717",
       "names": [],
       "sources": []
     },
@@ -22823,22 +22824,6 @@
       "digest": "47e5d84f1a93450a78c7f3954b43990d0f629af7c034a56313e5deb63e772c1b",
       "names": [],
       "sources": []
-    },
-    {
-      "digest": "47e9095591ae36e7c39ee62553097772f2bfa16304536a72dbbc3f691f605180",
-      "names": [
-        "packages/llm/llm/src/types.ts#StreamChunk"
-      ],
-      "sources": [
-        "packages/llm/llm/src/types.ts:452"
-      ]
-    },
-    {
-      "digest": "487b65c37bfedb8b72088c4107a0a90a6249701f6b26745f6d98f9b8a22b07c7",
-      "names": [],
-      "sources": [
-        "packages/llm/llm/src/assistant-stream.ts:44"
-      ]
     },
     {
       "digest": "48e5c9861f16ac07e78cb7b5ae9dabdf7bb85c58baed5a51b4ad275050ea58e3",
@@ -23074,13 +23059,6 @@
       "digest": "53cf1704ae0709c7678bcf070c83c619fc48ca1b5c173b74cfa8702f22a8e492",
       "names": [],
       "sources": []
-    },
-    {
-      "digest": "54f9276a1617d7c12594722c89cfe864bcbe4517e9a6f9c98bab14f199a135e0",
-      "names": [],
-      "sources": [
-        "packages/core/session/src/types.ts:355"
-      ]
     },
     {
       "digest": "557e148d30b79ee48645850832b30c717d7c3b64641deb5d6133b8b4e91ee0b8",
@@ -23323,7 +23301,7 @@
         "packages/llm/llm/src/types.ts#ToolSchema"
       ],
       "sources": [
-        "packages/llm/llm/src/types.ts:473"
+        "packages/llm/llm/src/types.ts:485"
       ]
     },
     {
@@ -23630,6 +23608,11 @@
       "sources": []
     },
     {
+      "digest": "7e460ceb73d9611a0be7475f036e22915ecf95f9d421f5676455989cc0e0b3ce",
+      "names": [],
+      "sources": []
+    },
+    {
       "digest": "7eaef7a763ba5b949b8464bc8add8980a3a5ab566014b69787aeba71e5dfe07b",
       "names": [],
       "sources": []
@@ -23753,11 +23736,6 @@
       "sources": [
         "packages/goal/goal/src/types.ts:52"
       ]
-    },
-    {
-      "digest": "84bbfdce7d2eab5b0c53e72ff7406db856c8bfd621b965b72fd86598ba493bf7",
-      "names": [],
-      "sources": []
     },
     {
       "digest": "854db3efdfb0cd39d30953b28703e519c121f1115cebfffc40369fe86c406dd1",
@@ -23923,9 +23901,25 @@
       ]
     },
     {
+      "digest": "8fe9bbf4fe336fd1ed7f8ae1c682642230fb2ce2ad525aa50e519f4768f742e1",
+      "names": [],
+      "sources": [
+        "packages/llm/llm/src/assistant-stream.ts:44"
+      ]
+    },
+    {
       "digest": "904bf499d98be4a3a5f836fcac533b6c4899569b018071e6604e1d32657d00fd",
       "names": [],
       "sources": []
+    },
+    {
+      "digest": "92d5db2644b83c94ba3e9b2027680c36db61ada0f3910f503d2c81b0860a840d",
+      "names": [
+        "packages/llm/llm/src/assistant-stream.ts#AssistantStreamRecord"
+      ],
+      "sources": [
+        "packages/llm/llm/src/assistant-stream.ts:20"
+      ]
     },
     {
       "digest": "930a6567a10bb62ddd157bd8abdf4b182810c8c3b49d91309b3b009a5fed9731",
@@ -24162,7 +24156,7 @@
       "digest": "a2b49331716ba0a7078b026d145306a70eae64b7313c3e6204bd931e75ec3bb1",
       "names": [],
       "sources": [
-        "packages/llm/llm/src/types.ts:459"
+        "packages/llm/llm/src/types.ts:471"
       ]
     },
     {
@@ -24673,6 +24667,13 @@
       ]
     },
     {
+      "digest": "c1706d2604d03540a6a2b300f602c76fba168d266269c821633a814a8f362873",
+      "names": [],
+      "sources": [
+        "packages/llm/llm/src/types.ts:458"
+      ]
+    },
+    {
       "digest": "c170da8ab7c37635b10867b2571811d9e317ac3ec394e8ff8efe53f902fc41c1",
       "names": [
         "packages/llm/llm-retry/src/types.ts#LlmRetryEventData"
@@ -25104,6 +25105,13 @@
       "sources": []
     },
     {
+      "digest": "e9a5a2294132d353c81f11e70d3d91a7475562cace35808537b293a78f48d1f0",
+      "names": [],
+      "sources": [
+        "packages/core/session/src/types.ts:355"
+      ]
+    },
+    {
       "digest": "ea08ec1df0c33108fd03345b9af199cf04dea450aa045d3c683f216311403403",
       "names": [],
       "sources": [
@@ -25206,13 +25214,6 @@
       ],
       "sources": [
         "packages/attachment/attachment/src/types.ts:39"
-      ]
-    },
-    {
-      "digest": "f1a96afe7503ac1817de769cd0ba13d9b80111c7034c50106b3344ecc14cc515",
-      "names": [],
-      "sources": [
-        "packages/llm/llm/src/types.ts:458"
       ]
     },
     {
@@ -25414,6 +25415,15 @@
       "digest": "fee1caf8ab6a65c1bc981f5a1730164490f22a2a89ffa3d0b76f1f432c44c8b5",
       "names": [],
       "sources": []
+    },
+    {
+      "digest": "ff39b86abe0ac2012c1733fc00013e861bc113c198bacfe8cfaf3bfb59a7c7be",
+      "names": [
+        "packages/llm/llm/src/types.ts#StreamChunk"
+      ],
+      "sources": [
+        "packages/llm/llm/src/types.ts:452"
+      ]
     }
   ]
 }

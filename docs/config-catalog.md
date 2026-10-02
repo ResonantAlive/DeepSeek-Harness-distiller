@@ -3509,7 +3509,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-tool-bash`
 
 - `inject`: `tools` · `shell` · `systemPrompt` · `shellEnv`
-- `source`: [`packages/shell/tool-bash/src/index.ts:37`](../packages/shell/tool-bash/src/index.ts)
+- `source`: [`packages/shell/tool-bash/src/index.ts:38`](../packages/shell/tool-bash/src/index.ts)
 
 ```ts config-catalog
 /** Configuration for the bash tool. */
@@ -3713,7 +3713,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-tool-pwsh`
 
 - `inject`: `tools` · `shell` · `systemPrompt` · `shellEnv`
-- `source`: [`packages/shell/tool-pwsh/src/index.ts:54`](../packages/shell/tool-pwsh/src/index.ts)
+- `source`: [`packages/shell/tool-pwsh/src/index.ts:55`](../packages/shell/tool-pwsh/src/index.ts)
 
 ```ts config-catalog
 /** Configuration for the pwsh tool. */
