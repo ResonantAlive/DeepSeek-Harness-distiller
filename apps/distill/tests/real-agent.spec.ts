@@ -50,9 +50,10 @@ async function corpus(): Promise<{ manifest: string; out: string }> {
     'version: 1',
     'task_id: T-REAL',
     'prompt: |',
-    '  Read the file data/input.txt in the current directory and write its',
-    '  contents reversed into a file named hello.txt in the current directory.',
-    '  Use a shell command or your file tools; either is fine.',
+    '  Run the shell command `cat data/input.txt` to read the input file.',
+    '  Then write its output reversed into a file named hello.txt in the',
+    '  current directory.',
+    '  Use the shell for the reading step; that is part of the task.',
     '  The result must be exactly the reversed text with no trailing newline.',
     'workspace:',
     '  template: basic',
@@ -107,16 +108,37 @@ describeReal('a real attempt through the composed application', () => {
       status: string
       attempt_summary: { total: number; selected_attempt_id: string | null }
       attempts: readonly {
-        teacher: { provider: string; model: string; served_model: string | null; temperature: number | null }
+        teacher: {
+          provider: string
+          model: string
+          served_model: string | null
+          temperature: number | null
+          config_hash: string | null
+        }
         last_error: unknown
         environment: { available_tools: readonly string[] | null }
         trajectory: readonly {
           decision: { assistant_message: string }
           actions: readonly { tool: string; arguments: string }[]
-          observations: readonly { tool_call_id: string; content: unknown; duration_ms: number | null }[]
+          observations: readonly {
+            tool_call_id: string
+            content: unknown
+            duration_ms: number | null
+            terminal?: {
+              shell: string
+              command: string | null
+              exit_code: number | null
+              timed_out: boolean
+              stdout: string
+              stderr: string
+            }
+          }[]
           file_changes: readonly { path: string }[]
         }[]
-        artifacts: { files_created: readonly string[] }
+        artifacts: {
+          files_created: readonly string[]
+          diffs: readonly { path: string; change: string; diff: string }[]
+        }
       }[]
     }
     expect(trajectory.attempt_summary.total).toBeGreaterThan(0)
@@ -144,7 +166,27 @@ describeReal('a real attempt through the composed application', () => {
     expect(observations.every(observation => calledIds.has(observation.tool_call_id))).toBe(true)
     expect(observations.some(observation => observation.duration_ms !== null)).toBe(true)
 
-    // The deliverable is attributed to the attempt that produced it.
+    // The task asked for the reading step to run in the shell, so the attempt
+    // has to carry the terminal facts the tool projected: an exit code and the
+    // two streams apart, none of which the model-facing text gives a consumer.
+    const terminals = observations.flatMap(observation => observation.terminal === undefined ? [] : [observation.terminal])
+    expect(terminals.length, `tools used: ${actions.map(action => action.tool).join(', ')}`).toBeGreaterThan(0)
+    // Whichever shell the host composes, the facts have to survive the same way.
+    expect(terminals.every(entry => entry.shell === 'bash' || entry.shell === 'pwsh')).toBe(true)
+    // A command that ran reports what it exited with; a merged text cannot.
+    expect(terminals.every(entry => entry.exit_code !== null || entry.timed_out)).toBe(true)
+    // The reading step is the one whose output held the input file.
+    expect(terminals.some(entry => entry.stdout.includes('listen'))).toBe(true)
+
+    // The deliverable is attributed to the attempt that produced it, and the
+    // trajectory says what went into it rather than only that it appeared.
     expect(attempt?.artifacts.files_created).toContain('hello.txt')
+    const deliverable = attempt?.artifacts.diffs.find(entry => entry.path === 'hello.txt')
+    expect(deliverable?.change).toBe('created')
+    expect(deliverable?.diff).toContain('+netsil')
+
+    // Every setting the request ran under is digestible, so two attempts can be
+    // told apart by configuration alone.
+    expect(attempt?.teacher.config_hash).toMatch(/^[0-9a-f]{64}$/)
   }, 600_000)
 })

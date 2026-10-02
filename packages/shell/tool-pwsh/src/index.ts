@@ -29,6 +29,7 @@ import type { GenericCallView, TerminalCallView, ToolDefinition, ToolExecution, 
 import { HarnessError } from '@deepseek-ai/dsh-llm'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { JobId, JobRegistry, JobView } from '@deepseek-ai/dsh-jobs'
+import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type {} from '@deepseek-ai/dsh-shell-env'
 import type {} from '@deepseek-ai/dsh-user-approval'
 import type { SandboxExecutionPolicy, SandboxMode } from '@deepseek-ai/dsh-sandbox'
@@ -186,6 +187,50 @@ function canonicalPwshResult(result: ShellRunResult): PwshForegroundResult {
         ...result.sandbox.runnerFailed !== undefined ? { runnerFailed: result.sandbox.runnerFailed } : {},
       },
     } : {},
+  }
+}
+
+/**
+ * Project the structured terminal facts of one pwsh call.
+ *
+ * The model reads what `renderPwshResult` produces, which merges the streams
+ * into one text; this projection is the durable, machine-readable record of the
+ * same run, so a captured trajectory can report an exit code and separate
+ * streams without parsing prose written for a reader. It is model-hidden: it
+ * travels on the tool result's metadata, never in the content the model sees.
+ *
+ * `workdir` is the directory the caller named, which is what a pure projection
+ * of the call can see; a call that named none ran in its session's directory,
+ * which this function cannot know.
+ *
+ * @param args - the call's arguments.
+ * @param value - the call's canonical value.
+ * @returns the terminal facts, or nothing when the value is not a foreground run.
+ */
+function pwshTerminalMeta(args: unknown, value: JsonValue): JsonValue {
+  const run = value as {
+    kind?: unknown
+    exitCode?: unknown
+    signal?: unknown
+    timedOut?: unknown
+    aborted?: unknown
+    timeoutMs?: unknown
+    stdout?: { text?: unknown }
+    stderr?: { text?: unknown }
+  }
+  if (run.kind !== 'foreground') return {}
+  const call = typeof args === 'object' && args !== null ? args as { command?: unknown; workdir?: unknown } : {}
+  return {
+    shell: 'pwsh',
+    ...typeof call.command === 'string' ? { command: call.command } : {},
+    ...typeof call.workdir === 'string' ? { workdir: call.workdir } : {},
+    exit_code: typeof run.exitCode === 'number' ? run.exitCode : null,
+    signal: typeof run.signal === 'string' ? run.signal : null,
+    timed_out: run.timedOut === true,
+    aborted: run.aborted === true,
+    ...typeof run.timeoutMs === 'number' ? { timeout_ms: run.timeoutMs } : {},
+    stdout: typeof run.stdout?.text === 'string' ? run.stdout.text : '',
+    stderr: typeof run.stderr?.text === 'string' ? run.stderr.text : '',
   }
 }
 
@@ -485,6 +530,7 @@ export function apply(ctx: Context, config: Config = {}): void {
           ],
         },
         /* jscpd:ignore-end */
+        presentationMeta: pwshTerminalMeta,
         render: (_args, value) => [{
           type: 'text',
           text: value.kind === 'background'
