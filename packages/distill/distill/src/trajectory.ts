@@ -59,12 +59,21 @@ export interface StepObservation {
    * missing measurement is never reported as a fast tool.
    */
   readonly duration_ms: number | null
-  /** Terminal shape, present when the invoking tool ran a shell command. */
+  /**
+   * Terminal shape, present when the tool ran a shell command and recorded what
+   * happened. `cwd` is the directory the call named, which is what a pure
+   * projection of the call can see; a call that named none reports `null`.
+   */
   readonly terminal?: {
     readonly shell: string
-    readonly command: string
+    readonly command: string | null
+    readonly cwd: string | null
     readonly exit_code: number | null
+    readonly signal: string | null
     readonly timed_out: boolean
+    readonly aborted: boolean
+    readonly stdout: string
+    readonly stderr: string
   }
 }
 
@@ -191,6 +200,41 @@ export function textOf(value: unknown): string {
   return JSON.stringify(value)
 }
 
+/**
+ * The terminal facts of one tool result.
+ *
+ * A tool that ran a command records them in its result metadata, which is the
+ * only place an exit code and the separated streams survive: the model-facing
+ * content merges those streams into prose written for a reader. A result that
+ * recorded no such metadata reports no terminal at all rather than rebuilding
+ * one from the call's arguments, which would describe what was asked for instead
+ * of what actually ran.
+ *
+ * @param payload - the recorded tool result.
+ * @returns the terminal shape, or an empty object when no command ran.
+ */
+export function terminalOf(
+  payload: Readonly<Record<string, unknown>>,
+): Pick<StepObservation, 'terminal'> | Record<string, never> {
+  const meta = payload.meta
+  if (meta === null || typeof meta !== 'object' || Array.isArray(meta)) return {}
+  const record = meta as Record<string, unknown>
+  if (typeof record.shell !== 'string') return {}
+  return {
+    terminal: {
+      shell: record.shell,
+      command: typeof record.command === 'string' ? record.command : null,
+      cwd: typeof record.workdir === 'string' ? record.workdir : null,
+      exit_code: typeof record.exit_code === 'number' ? record.exit_code : null,
+      signal: typeof record.signal === 'string' ? record.signal : null,
+      timed_out: record.timed_out === true,
+      aborted: record.aborted === true,
+      stdout: typeof record.stdout === 'string' ? record.stdout : '',
+      stderr: typeof record.stderr === 'string' ? record.stderr : '',
+    },
+  }
+}
+
 /** Extract the concatenated text of a tool-result content block list. */
 function contentText(content: unknown): string {
   if (!Array.isArray(content)) return textOf(content)
@@ -313,7 +357,6 @@ export function buildTrajectory(
     }
     if (event.event_type === 'tool_result') {
       const callId = String(payload.tool_call_id)
-      const action = pending?.actions.find(entry => entry.tool_call_id === callId)
       const content = contentText(payload.content)
       const startedAt = calledAt.get(callId)
       pending?.observations.push({
@@ -327,14 +370,7 @@ export function buildTrajectory(
         // The gap between the committed call and its committed result, which is
         // how long the tool actually took rather than how long the turn did.
         duration_ms: startedAt === undefined ? null : Math.max(0, event.monotonic_ms - startedAt),
-        ...action === undefined ? {} : {
-          terminal: {
-            shell: action.tool,
-            command: action.arguments,
-            exit_code: typeof payload.exit_code === 'number' ? payload.exit_code : null,
-            timed_out: payload.timed_out === true,
-          },
-        },
+        ...terminalOf(payload),
       })
       if (content.length > 0) final = content
       continue

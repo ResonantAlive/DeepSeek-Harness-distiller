@@ -331,11 +331,12 @@ describe('buildTrajectory details', () => {
     expect(trajectory.artifacts.files_created).toEqual(['out.txt', 'stray.txt'])
   })
 
-  it('reports a terminal shape for a shell tool result', () => {
-    const trajectory = buildTrajectory([
+  it('reports the terminal facts a shell tool recorded', () => {
+    // A tool that names only its shell still reports a terminal, with every
+    // fact it did not state left explicit rather than guessed.
+    const sparse = buildTrajectory([
       event('assistant_message', { step: 0, decision: { text: 'run', reasoning: null, reasoning_available: false, tool_calls: [] } }),
-      event('tool_call', { step: 0, tool_call_id: 'c1', tool: 'bash', arguments: '{"command":"ls"}' }),
-      event('tool_result', { step: 0, tool_call_id: 'c1', is_error: false, content: 'files', exit_code: 0, timed_out: false }),
+      event('tool_result', { step: 0, tool_call_id: 'c1', is_error: false, content: 'x', meta: { shell: 'pwsh' } }),
     ], {
       attemptId: 'attempt_001',
       status: 'SUCCESS',
@@ -343,9 +344,59 @@ describe('buildTrajectory details', () => {
       evaluation: null,
       fileCapture: { git: false, coverage: 'file-tools-only' },
     })
-    expect(trajectory.trajectory[0]?.observations[0]?.terminal).toEqual({
-      shell: 'bash', command: '{"command":"ls"}', exit_code: 0, timed_out: false,
+    expect(sparse.trajectory[0]?.observations[0]?.terminal).toEqual({
+      shell: 'pwsh', command: null, cwd: null, exit_code: null, signal: null,
+      timed_out: false, aborted: false, stdout: '', stderr: '',
     })
+  })
+
+  it('separates the streams and exit code a shell tool recorded', () => {
+    const trajectory = buildTrajectory([
+      event('assistant_message', { step: 0, decision: { text: 'run', reasoning: null, reasoning_available: false, tool_calls: [] } }),
+      event('tool_call', { step: 0, tool_call_id: 'c1', tool: 'bash', arguments: '{"command":"ls"}' }),
+      event('tool_result', {
+        step: 0,
+        tool_call_id: 'c1',
+        is_error: false,
+        content: 'files\n[stderr]\nwarning',
+        meta: {
+          shell: 'bash', command: 'ls', workdir: '/work',
+          exit_code: 2, signal: 'SIGKILL', timed_out: false, aborted: false, timeout_ms: 1000,
+          stdout: 'files\n', stderr: 'warning\n',
+        },
+      }),
+    ], {
+      attemptId: 'attempt_001',
+      status: 'SUCCESS',
+      integrityFlags: [],
+      evaluation: null,
+      fileCapture: { git: false, coverage: 'file-tools-only' },
+    })
+    // The streams are separated and the exit code is real, which the merged
+    // model-facing content cannot give a dataset consumer.
+    expect(trajectory.trajectory[0]?.observations[0]?.terminal).toEqual({
+      shell: 'bash', command: 'ls', cwd: '/work', exit_code: 2, signal: 'SIGKILL',
+      timed_out: false, aborted: false, stdout: 'files\n', stderr: 'warning\n',
+    })
+  })
+
+  it('reports no terminal for a result that recorded none', () => {
+    const trajectory = buildTrajectory([
+      event('assistant_message', { step: 0, decision: { text: 'run', reasoning: null, reasoning_available: false, tool_calls: [] } }),
+      event('tool_call', { step: 0, tool_call_id: 'c1', tool: 'bash', arguments: '{"command":"ls"}' }),
+      // A tool with no metadata, metadata naming no shell, and metadata that is
+      // not a mapping all report nothing rather than guessing from the call.
+      event('tool_result', { step: 0, tool_call_id: 'c1', is_error: false, content: 'files' }),
+      event('tool_result', { step: 1, tool_call_id: 'c2', is_error: false, content: 'x', meta: { other: 1 } }),
+      event('tool_result', { step: 2, tool_call_id: 'c3', is_error: false, content: 'x', meta: 'plain' }),
+    ], {
+      attemptId: 'attempt_001',
+      status: 'SUCCESS',
+      integrityFlags: [],
+      evaluation: null,
+      fileCapture: { git: false, coverage: 'file-tools-only' },
+    })
+    expect(trajectory.trajectory[0]?.observations.every(observation => observation.terminal === undefined)).toBe(true)
   })
 
   it('uses an empty step list when no event was recorded', () => {
