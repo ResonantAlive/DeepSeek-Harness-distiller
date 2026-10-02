@@ -42,3 +42,9 @@
   disabled: true
 - id: tool-ralph
   disabled: true
+
+# Profile hot reload belongs to an interactive session watching a profile it is
+# editing. A distillation run is a batch job that reads its profile once, so the
+# plugin has nothing to watch and refuses to activate on every boot.
+- id: hmr
+  disabled: true

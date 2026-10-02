@@ -346,3 +346,9 @@ export async function main(
     await composition.shutdown()
   }
 }
+
+// `main` stays importable so a test can drive a run with a scripted agent; this
+// guard is what makes the file the application entry point when it is launched.
+if (import.meta.main) {
+  await main(process.argv.slice(2))
+}
