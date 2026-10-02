@@ -117,6 +117,10 @@ describe('task validation refusals', () => {
     rejects((d) => { d.env = 'x' }, /env/)
   })
 
+  it('refuses a task whose evaluator or tools is not a mapping', () => {
+    rejects((d) => { d.evaluator = 'true' }, /"evaluator" must be a mapping/)
+    rejects((d) => { d.tools = 'read' }, /"tools" must be a mapping/)
+  })
   it('accepts every optional field when it is well formed', () => {
     const earlier = resolve(process.cwd(), 'x')
     expect(earlier.length).toBeGreaterThan(0)
@@ -251,6 +255,57 @@ describe('trajectory edge cases', () => {
     expect(trajectory.trajectory[0]?.observations[0]?.terminal).toBeUndefined()
   })
 
+  it('reads a text block that carries text and one that does not', () => {
+    const trajectory = buildTrajectory([
+      event('assistant_message', { step: 0, decision: { text: 'go', reasoning: null, reasoning_available: false, tool_calls: [] } }),
+      event('tool_result', {
+        step: 0,
+        tool_call_id: 'c1',
+        is_error: false,
+        content: [{ type: 'text', text: 'said' }, { type: 'text' }],
+      }),
+    ], options)
+    expect(trajectory.trajectory[0]?.observations[0]?.content).toBe('said')
+  })
+
+  it('takes the schema field name, then text, then nothing', () => {
+    const withText = buildTrajectory([
+      event('assistant_message', { step: 0, decision: { text: 'only text', reasoning: null, reasoning_available: false, tool_calls: [] } }),
+    ], options)
+    expect(withText.final).toBe('only text')
+    // A decision naming neither is empty rather than absent.
+    const empty = buildTrajectory([
+      event('assistant_message', { step: 0, decision: { reasoning: null, reasoning_available: false, tool_calls: [] } }),
+    ], options)
+    expect(empty.final).toBe('')
+  })
+
+  it('keeps the header provider and model when the configuration states them', () => {
+    const trajectory = buildTrajectory([
+      event('task_start', { phase: 'request-header', config: { provider: 'deepseek-official', model: 'deepseek-flash' } }),
+    ], options)
+    expect(trajectory.teacher.provider).toBe('deepseek-official')
+    expect(trajectory.teacher.model).toBe('deepseek-flash')
+  })
+
+  it('accepts a check that states no timeout and one that states a limit', () => {
+    const task = parseTask('t.yml', {
+      version: 1,
+      task_id: 'T-1',
+      prompt: 'p',
+      workspace: { template: 't' },
+      evaluator: { kind: 'test_command', command: ['true'] },
+      checks: [
+        { kind: 'command_succeeds', command: ['true'] },
+        { kind: 'command_succeeds', command: ['true'], timeout_ms: 5000 },
+      ],
+      tags: ['x', 'y'],
+      batch: 3,
+    })
+    expect(task.checks).toHaveLength(2)
+    expect(task.batch).toBe(3)
+    expect(task.tags).toEqual(['x', 'y'])
+  })
   it('reads the model the provider reported serving the request', () => {
     const trajectory = buildTrajectory([
       event('task_start', { phase: 'response-header', model: 'deepseek-flash-2026' }),

@@ -473,6 +473,80 @@ describe('attempt budgets', () => {
     expect(result.status).toBe('UNKNOWN')
     expect(result.datasetDir).toBe('invalid/unknown/T-X')
   })
+
+  it('reports a file the attempt rewrote as modified', async () => {
+    const root = await scratch()
+    const dataset = new DatasetWriter({ root: join(root, 'dataset') })
+    const result = await runTask({
+      task: task(),
+      defaults: { max_attempts: 1 },
+      templatesRoot: await templatesAt(root),
+      evaluatorRoot: join(root, 'evaluator'),
+      runsRoot: join(root, 'runs'),
+      dataset,
+      agent: teacher(async (context) => {
+        // The template supplies README.md, so rewriting it is a modification.
+        await writeFile(join(context.workspace, 'README.md'), 'rewritten\n', 'utf8')
+        await succeed(context)
+        return { status: 'SUCCESS', reason: 'done' }
+      }),
+    })
+    expect(result.attempts[0]?.artifacts.files_modified).toContain('README.md')
+  })
+  it('carries every budget a task or its manifest states', () => {
+    const limits = attemptLimits({
+      attempt_timeout_ms: 1000,
+      max_steps_per_attempt: 2,
+      max_tokens_per_attempt: 500,
+      repeat_action_limit: 3,
+    } as TaskDefinition, {})
+    expect(limits).toEqual({
+      attempt_timeout_ms: 1000,
+      max_steps_per_attempt: 2,
+      max_tokens_per_attempt: 500,
+      repeat_action_limit: 3,
+    })
+  })
+
+  it('counts usage that omits one of its totals', () => {
+    expect(totalTokens([
+      event('assistant_message', { phase: 'usage', usage: { inputTokens: 7 } }),
+      event('assistant_message', { phase: 'usage', usage: { outputTokens: 3 } }),
+    ])).toBe(10)
+  })
+
+  it('stays inside its repeat limit when no action repeats', () => {
+    const trajectory = buildTrajectory(
+      [step('one'), step('two', 'write', '{"path":"b"}')].flat().map(entry => event(entry.event_type, entry.payload)),
+      options,
+    )
+    expect(budgetBreach(trajectory, [], { repeat_action_limit: 2 })).toBeUndefined()
+  })
+
+  it('records the environment, the task budget, and an agent error class', async () => {
+    const root = await scratch()
+    const dataset = new DatasetWriter({ root: join(root, 'dataset') })
+    const result = await runTask({
+      task: task({ max_attempts: 2, evaluator: { ...MARKER_EVALUATOR, assets: [] } }),
+      defaults: {},
+      templatesRoot: await templatesAt(root),
+      evaluatorRoot: join(root, 'evaluator'),
+      runsRoot: join(root, 'runs'),
+      dataset,
+      environment: { available_tools: ['read', 'write'], sandbox_mode: 'workspace-write' },
+      agent: teacher(async (context) => {
+        await succeed(context)
+        return { status: 'ERROR', errorClass: 'agent', reason: 'a tool rejected its arguments' }
+      }),
+    })
+    // The evaluator judged the work, so its verdict stands over the agent's claim.
+    expect(result.status).toBe('SUCCESS')
+    expect(result.attempts[0]?.environment).toEqual({
+      tools: null,
+      available_tools: ['read', 'write'],
+      sandbox_mode: 'workspace-write',
+    })
+  })
   it('surfaces the sampling temperature and the last failure', () => {
     const trajectory = buildTrajectory([
       event('task_start', { phase: 'request-header', config: { provider: 'p', model: 'm', temperature: 0.2 } }),
