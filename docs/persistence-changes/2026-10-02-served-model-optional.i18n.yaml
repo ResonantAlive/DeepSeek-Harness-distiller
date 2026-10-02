@@ -1,0 +1,28 @@
+# Bilingual-pair consistency record for 2026-10-02-served-model-optional.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/persistence-changes/2026-10-02-served-model-optional.md
+/:
+  en: 3d5a424ae7d7e46b
+  zh: c22a8e4a62d8cc1a
+/2026-10-02-served-model-optional:
+  en: 4ee685a7123936db
+  zh: 218dde7987f467f2
+/2026-10-02-served-model-optional/summary:
+  en: bdbaa864f9014302
+  zh: 9c620d745c5401fd
+/2026-10-02-served-model-optional/table-of-contents:
+  en: 6cf314a069ceb451
+  zh: 9adff678e9ecab3b
+/2026-10-02-served-model-optional/declaration:
+  en: 6907136f28e48c90
+  zh: 02f8298485f3d8e7
+/2026-10-02-served-model-optional/compatibility:
+  en: 2ac2088d7af693cc
+  zh: cf3e9d4e26b50e4c
+/2026-10-02-served-model-optional/verification:
+  en: f634c0f7838dd7e6
+  zh: b11eb4583b92865f
+/2026-10-02-served-model-optional/dev-note:
+  en: b75c8458928b72b9
+  zh: 003ba4e17b4b5269
