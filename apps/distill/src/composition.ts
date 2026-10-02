@@ -125,6 +125,19 @@ function overlayModuleLayers(path: string, patches: readonly PatchOptions[]): Pr
   }))
 }
 
+/**
+ * The tool names the composition actually registered.
+ *
+ * Only the registry knows which tools survived every patch layer, so a run asks
+ * it rather than inferring the set from the task's declared spec.
+ *
+ * @param ctx - the composed context.
+ * @returns the registered tool names, in registry order.
+ */
+export function availableToolsOf(ctx: Context): string[] {
+  return ctx.tools.schemas().map(schema => schema.name)
+}
+
 /** A booted composition. */
 export interface DistillComposition {
   /** The composed context; every service a run needs is reachable from it. */

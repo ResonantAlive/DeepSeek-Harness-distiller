@@ -3,7 +3,7 @@ import { existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { bootDistillComposition, pinnedTeacher } from '../src/composition.ts'
+import { availableToolsOf, bootDistillComposition, pinnedTeacher } from '../src/composition.ts'
 import type { DistillComposition } from '../src/composition.ts'
 import { createAgentRunner } from '../src/agent-runner.ts'
 import { runAll } from '../src/bin.ts'
@@ -40,15 +40,20 @@ async function corpus(): Promise<{ manifest: string; out: string }> {
   const templates = join(root, 'templates', 'basic')
   await mkdir(templates, { recursive: true })
   await writeFile(join(templates, 'README.md'), 'A scratch workspace.\n', 'utf8')
+  // The input exists only on disk, so the task cannot be solved without reading
+  // it, and the answer must be written, so the trajectory must contain tools.
+  await mkdir(join(templates, 'data'), { recursive: true })
+  await writeFile(join(templates, 'data', 'input.txt'), 'listen\n', 'utf8')
   await mkdir(join(root, 'evaluator'), { recursive: true })
   await mkdir(join(root, 'tasks'), { recursive: true })
   await writeFile(join(root, 'tasks', 'T-REAL.yml'), [
     'version: 1',
     'task_id: T-REAL',
     'prompt: |',
-    '  Create a file named hello.txt in the current directory whose entire',
-    '  contents are exactly the single word: hello',
-    '  Then you are done. Do not explain.',
+    '  Read the file data/input.txt in the current directory and write its',
+    '  contents reversed into a file named hello.txt in the current directory.',
+    '  Use a shell command or your file tools; either is fine.',
+    '  The result must be exactly the reversed text with no trailing newline.',
     'workspace:',
     '  template: basic',
     'evaluator:',
@@ -57,8 +62,8 @@ async function corpus(): Promise<{ manifest: string; out: string }> {
     '    - node',
     '    - -e',
     // The evaluator decides from the workspace alone, so a judged success means
-    // the model actually created the file rather than claimed it had.
-    `    - ${JSON.stringify("process.exit(require('node:fs').readFileSync(require('node:path').join('..','workspace','hello.txt'),'utf8').trim()==='hello'?0:1)")}`,
+    // the model actually produced the file rather than claimed it had.
+    `    - ${JSON.stringify("process.exit(require('node:fs').readFileSync(require('node:path').join('..','workspace','hello.txt'),'utf8').trim()==='netsil'?0:1)")}`,
     '',
   ].join('\n'), 'utf8')
   const manifest = join(root, 'tasks', 'manifest.yml')
@@ -89,7 +94,7 @@ describeReal('a real attempt through the composed application', () => {
         capture: composition.capture,
         attemptTimeoutMs: 240_000,
       }),
-      { secrets: [] },
+      { secrets: [], environment: { available_tools: availableToolsOf(composition.ctx) } },
     )
     expect(reports).toHaveLength(1)
     expect(reports[0]?.status).toBe('SUCCESS')
@@ -102,8 +107,15 @@ describeReal('a real attempt through the composed application', () => {
       status: string
       attempt_summary: { total: number; selected_attempt_id: string | null }
       attempts: readonly {
-        teacher: { provider: string; model: string; served_model: string | null }
-        trajectory: readonly unknown[]
+        teacher: { provider: string; model: string; served_model: string | null; temperature: number | null }
+        last_error: unknown
+        environment: { available_tools: readonly string[] | null }
+        trajectory: readonly {
+          decision: { assistant_message: string }
+          actions: readonly { tool: string; arguments: string }[]
+          observations: readonly { tool_call_id: string; content: unknown; duration_ms: number | null }[]
+          file_changes: readonly { path: string }[]
+        }[]
         artifacts: { files_created: readonly string[] }
       }[]
     }
@@ -114,6 +126,24 @@ describeReal('a real attempt through the composed application', () => {
     // consumer needs; the requested id is only what was asked for.
     expect(attempt?.teacher.served_model).not.toBeNull()
     expect(attempt?.trajectory.length).toBeGreaterThan(0)
+    expect(attempt?.last_error).toBeNull()
+    // The composition enumerated the tools it actually offered.
+    expect(attempt?.environment.available_tools).not.toBeNull()
+    expect(attempt?.environment.available_tools?.length).toBeGreaterThan(0)
+
+    // The task cannot be solved without touching the workspace, so a judged
+    // success has to have left real actions behind, each answered by a result
+    // that carries how long its tool took.
+    const actions = attempt?.trajectory.flatMap(step => step.actions) ?? []
+    const observations = attempt?.trajectory.flatMap(step => step.observations) ?? []
+    expect(actions.length).toBeGreaterThan(0)
+    expect(observations.length).toBeGreaterThan(0)
+    expect(actions.every(action => action.tool.length > 0)).toBe(true)
+    // Every observation answers an action that was recorded, by the same id.
+    const calledIds = new Set(actions.map(action => (action as unknown as { tool_call_id: string }).tool_call_id))
+    expect(observations.every(observation => calledIds.has(observation.tool_call_id))).toBe(true)
+    expect(observations.some(observation => observation.duration_ms !== null)).toBe(true)
+
     // The deliverable is attributed to the attempt that produced it.
     expect(attempt?.artifacts.files_created).toContain('hello.txt')
   }, 600_000)

@@ -19,7 +19,7 @@ import { loadTasks } from '@deepseek-ai/dsh-distill'
 import { runTask } from '@deepseek-ai/dsh-distill'
 import type { AgentRunner } from '@deepseek-ai/dsh-distill'
 import { collectEnvironmentSecrets } from '@deepseek-ai/dsh-distill-redaction'
-import { bootDistillComposition, pinnedTeacher } from './composition.ts'
+import { availableToolsOf, bootDistillComposition, pinnedTeacher } from './composition.ts'
 import type {} from '@deepseek-ai/dsh-tools'
 import { createAgentRunner } from './agent-runner.ts'
 
@@ -238,7 +238,7 @@ export async function main(
   try {
     // The registry is the only place that knows which tools the composition
     // actually holds, so the attempt records what ran rather than what was asked.
-    const environment = { available_tools: composition.ctx.tools.schemas().map(schema => schema.name) }
+    const environment = { available_tools: availableToolsOf(composition.ctx) }
     const agent = createAgentRunner(composition.ctx, {
       ...pinnedTeacher(composition.ctx),
       capture: composition.capture,
