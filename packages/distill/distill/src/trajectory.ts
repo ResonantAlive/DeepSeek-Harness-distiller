@@ -13,6 +13,7 @@
  * @module @deepseek-ai/dsh-distill/trajectory
  */
 
+import { createHash } from 'node:crypto'
 import type { IntegrityFlag, Status } from './types.ts'
 import type { RawEvent, SpilledField } from '@deepseek-ai/dsh-distill-trajectory-events/writer'
 
@@ -120,6 +121,13 @@ export interface AttemptTrajectory {
      */
     readonly temperature: number | null
     /**
+     * A digest of every effective call setting, so two attempts can be told
+     * apart by configuration alone. `null` when the attempt recorded no request
+     * header, because a digest of nothing would claim a configuration nobody
+     * stated.
+     */
+    readonly config_hash: string | null
+    /**
      * The model the provider reported serving the request, when it named one.
      *
      * `model` is what the request asked for; this is what answered. They differ
@@ -198,6 +206,27 @@ export function textOf(value: unknown): string {
   if (spilled.truncated === true && typeof spilled.preview === 'string') return spilled.preview
   // A JSON value always serializes, so no fallback is reachable here.
   return JSON.stringify(value)
+}
+
+/**
+ * A digest of the call settings an attempt ran under.
+ *
+ * Keys are sorted so the digest depends on the settings rather than on the order
+ * a provider happened to serialise them, and a missing header digests to `null`
+ * rather than to the digest of an empty object, which would claim a configuration
+ * nobody stated.
+ *
+ * @param config - the recorded request-header configuration.
+ * @returns the digest, or `null` when no configuration was recorded.
+ */
+export function configHashOf(config: unknown): string | null {
+  if (config === null || typeof config !== 'object' || Array.isArray(config)) return null
+  const entries = Object.entries(config as Record<string, unknown>)
+    .filter(([, value]) => value !== undefined)
+    // Object keys are unique, so two never compare equal and the comparator needs
+    // only the two opposite orders.
+    .sort(([left], [right]) => (left < right ? -1 : 1))
+  return createHash('sha256').update(JSON.stringify(entries)).digest('hex')
 }
 
 /**
@@ -301,6 +330,7 @@ export function buildTrajectory(
   let maxTokens: number | null = null
   let servedModel: string | null = null
   let temperature: number | null = null
+  let headerConfig: unknown
   let lastError: unknown = null
   let environment: AttemptTrajectory['environment'] = { tools: null, available_tools: null, sandbox_mode: null }
   let final = ''
@@ -409,6 +439,7 @@ export function buildTrajectory(
         maxTokens = config.maxTokens ?? maxTokens
         temperature = config.temperature ?? temperature
         headerReasoningEffort = config.reasoningEffort
+        headerConfig = config
       }
       continue
     }
@@ -426,7 +457,15 @@ export function buildTrajectory(
   const finishedAt = last?.timestamp ?? startedAt
   return {
     attempt_id: options.attemptId,
-    teacher: { provider, model, reasoning_effort: reasoningEffort, max_tokens: maxTokens, served_model: servedModel, temperature },
+    teacher: {
+      provider,
+      model,
+      reasoning_effort: reasoningEffort,
+      max_tokens: maxTokens,
+      served_model: servedModel,
+      temperature,
+      config_hash: configHashOf(headerConfig),
+    },
     last_error: lastError,
     environment,
     status: options.status,

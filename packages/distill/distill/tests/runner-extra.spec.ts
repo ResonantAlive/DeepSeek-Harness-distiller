@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { DatasetWriter } from '../src/dataset.ts'
 import { discardAttempt, attemptLimits, budgetBreach, endAttempt, promptFor, readEvents, repeatedAction, runTask, totalTokens } from '../src/runner.ts'
 import type { AgentRunner, AttemptContext } from '../src/runner.ts'
-import { buildTrajectory, textOf } from '../src/trajectory.ts'
+import { buildTrajectory, configHashOf, textOf } from '../src/trajectory.ts'
 import { parseRunnerArgs, resourcePlanFor } from '../../../../apps/distill/src/bin.ts'
 import { validate } from '@deepseek-ai/dsh-distill-resource'
 import type { RawEvent } from '@deepseek-ai/dsh-distill-trajectory-events/writer'
@@ -290,7 +290,9 @@ describe('buildTrajectory details', () => {
       fileCapture: { git: false, coverage: 'file-tools-only' },
     })
     expect(trajectory.trajectory[0]?.decision.reasoning_effort).toBe('max')
-    expect(trajectory.teacher).toEqual({ provider: 'p', model: 'm', reasoning_effort: 'max', max_tokens: 9, served_model: null, temperature: null })
+    expect(trajectory.teacher).toMatchObject({ provider: 'p', model: 'm', reasoning_effort: 'max', max_tokens: 9, served_model: null, temperature: null })
+    // The digest covers every setting the header stated.
+    expect(trajectory.teacher.config_hash).toMatch(/^[0-9a-f]{64}$/)
   })
 
   it('ignores bookkeeping assistant messages and unknown phases', () => {
@@ -331,6 +333,17 @@ describe('buildTrajectory details', () => {
     expect(trajectory.artifacts.files_created).toEqual(['out.txt', 'stray.txt'])
   })
 
+  it('digests the same call settings to the same hash whatever their order', () => {
+    expect(configHashOf({ provider: 'p', model: 'm' })).toBe(configHashOf({ model: 'm', provider: 'p' }))
+    expect(configHashOf({ provider: 'p', model: 'm' })).not.toBe(configHashOf({ provider: 'p', model: 'x' }))
+    // A setting left unstated is absent rather than null, so it cannot shift the
+    // digest of a configuration that never mentioned it.
+    expect(configHashOf({ provider: 'p', temperature: undefined })).toBe(configHashOf({ provider: 'p' }))
+    // A configuration nobody stated has no digest rather than an empty one.
+    expect(configHashOf(null)).toBeNull()
+    expect(configHashOf([])).toBeNull()
+    expect(configHashOf('plain')).toBeNull()
+  })
   it('reports the terminal facts a shell tool recorded', () => {
     // A tool that names only its shell still reports a terminal, with every
     // fact it did not state left explicit rather than guessed.
@@ -408,7 +421,9 @@ describe('buildTrajectory details', () => {
       fileCapture: { git: false, coverage: 'file-tools-only' },
     })
     expect(trajectory.trajectory).toEqual([])
-    expect(trajectory.teacher).toEqual({ provider: 'unknown', model: 'unknown', reasoning_effort: null, max_tokens: null, served_model: null, temperature: null })
+    expect(trajectory.teacher).toMatchObject({ provider: 'unknown', model: 'unknown', reasoning_effort: null, max_tokens: null, served_model: null, temperature: null })
+    // No header was recorded, so no configuration is claimed.
+    expect(trajectory.teacher.config_hash).toBeNull()
     expect(trajectory.duration_ms).toBe(0)
   })
 })
