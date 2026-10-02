@@ -44,8 +44,9 @@ const { value, counts } = redactor.redact(`DEEPSEEK_API_KEY=sk-live-abcdefghijkl
 
 ```ts
 import { createRedactor } from '@deepseek-ai/dsh-distill-redaction'
+import type { RedactableValue } from '@deepseek-ai/dsh-distill-redaction'
 
-declare const event: Record<string, unknown>
+declare const event: RedactableValue
 const redactor = createRedactor({ secrets: ['a-configured-value'] })
 const { value } = redactor.redactValue(event)
 ```

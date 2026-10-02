@@ -30,17 +30,23 @@ kind: "package-reference"
 每个 attempt 构建一个记录器，挂载它，并在 attempt 结束前排空它。
 
 ```ts
-import { createRecorder, apply } from '@deepseek-ai/dsh-distill-trajectory-events'
+import { Context } from '@deepseek-ai/cordis'
+import { apply, captureOf, createRecorder } from '@deepseek-ai/dsh-distill-trajectory-events'
+
+const ctx = new Context()
+apply(ctx)
 
 const recorder = createRecorder({
   root: 'runs/T-1/attempt_001',
   taskId: 'T-1',
   attemptId: 'attempt_001',
   batchId: 'batch_0',
-  secrets: collectEnvironmentSecrets(),
 })
-apply(ctx, { recorder })
-// … the agent runs …
+// Binding is per attempt: the release unbinds this recorder without disturbing
+// one a later attempt binds.
+const release = captureOf(ctx)?.bind(recorder)
+// … the agent runs, and the bound recorder observes it …
+release?.()
 await recorder.flush()
 ```
 

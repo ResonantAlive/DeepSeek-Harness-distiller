@@ -15,7 +15,7 @@
 import { mkdir } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { DatasetWriter, rateLimitOf, RateLimitGate } from '@deepseek-ai/dsh-distill'
-import { assertPlanHolds, detectHostResources } from '@deepseek-ai/dsh-distill-resource'
+import { detectHostResources, resolvePlan } from '@deepseek-ai/dsh-distill-resource'
 import type { HostResources, ResourcePlanInput } from '@deepseek-ai/dsh-distill-resource'
 import { loadTasks } from '@deepseek-ai/dsh-distill'
 import { runTask } from '@deepseek-ai/dsh-distill'
@@ -320,7 +320,9 @@ export async function main(
   const args = parseRunnerArgs(argv)
   // The partitioning is checked before anything is booted, so an over-allocated
   // plan costs a failed startup rather than a run the kernel kills partway.
-  assertPlanHolds(resourcePlanFor(args))
+  // The returned plan carries the totals the admission gate needs, so the run
+  // holds a validated partitioning rather than only a promise that one exists.
+  resolvePlan(resourcePlanFor(args))
   const secrets = collectEnvironmentSecrets()
   if (options.agent !== undefined) {
     return report(await runAll(args, options.agent, { secrets }))

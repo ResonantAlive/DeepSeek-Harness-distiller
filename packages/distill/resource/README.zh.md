@@ -29,22 +29,27 @@ kind: "package-reference"
 
 ```ts
 import {
-  assertPlanHolds,
   createTaskAdmissionGate,
   detectHostResources,
+  resolvePlan,
 } from '@deepseek-ai/dsh-distill-resource'
 
 // What the host actually allows. In a container this reads the cgroup limits,
 // which are tighter than what `os.totalmem()` reports for the physical machine.
 const host = detectHostResources()
 
-assertPlanHolds({
+// Two batches of 16 CPU and 30 GiB leave room for the reserve on a host that
+// holds it. resolvePlan refuses one that does not, and returns the plan with
+// the totals the gate below reads.
+const plan = resolvePlan({
   host,
   batches: [{ cpu: 16, memoryMb: 30_720 }, { cpu: 16, memoryMb: 30_720 }],
   reservedCpu: 1,
   reservedMemoryMb: 2048,
   maxConcurrentTasks: 8,
 })
+
+declare function runOneTask(): Promise<void>
 
 const gate = createTaskAdmissionGate({ plan, perTaskMemoryMb: 2048 })
 const release = await gate.acquire({ batchIndex: 0 })
@@ -86,10 +91,19 @@ v1 配额 `-1` 与 v2 配额 `max` 都表示「无限制」，v1 内存标记 `9
 `createTaskAdmissionGate` 最多接纳 `maxConcurrentTasks` 个任务，每个批次自身最多 `maxConcurrentTasks` 个，并且绝不接纳会让空闲内存低于 `reservedMemoryMb` 的占用。`acquire` 解析出一个必须恰好调用一次的释放函数；第二次调用为空操作。
 
 ```ts
-const release = await gate.acquire(
-  { batchIndex: 0, memoryMb: 4096 },
-  { signal: controller.signal, timeoutMs: 30_000 },
-)
+import type { AdmissionGate } from '@deepseek-ai/dsh-distill-resource'
+
+declare const gate: AdmissionGate
+declare const controller: AbortController
+
+async function claim(): Promise<() => void> {
+  // A claim that cannot be met before the deadline rejects rather than waiting
+  // forever, and the caller's signal cancels a wait that is already running.
+  return gate.acquire(
+    { batchIndex: 0, memoryMb: 4096 },
+    { signal: controller.signal, timeoutMs: 30_000 },
+  )
+}
 ```
 
 当批次索引未被声明、当某项占用会吃掉预留量、当调用方的信号被中止，或在期限之前没有空位出现时，它会以 `AdmissionRefusedError` 拒绝。

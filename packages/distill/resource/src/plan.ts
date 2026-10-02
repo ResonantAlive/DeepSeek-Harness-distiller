@@ -148,6 +148,25 @@ export function validate(input: ResourcePlanInput): ValidationResult {
 }
 
 /**
+ * Turn a requested partitioning into the plan the rest of the package reads.
+ *
+ * The admission gate needs the totals, and only this function knows them, so a
+ * caller outside the package has no other way to obtain a plan to hand it.
+ *
+ * @param input - the batches, the reserve, and the detected host.
+ * @returns the plan, carrying the totals the input does not state.
+ * @throws ResourceAllocationError when the plan does not fit the host.
+ */
+export function resolvePlan(input: ResourcePlanInput): ResourcePlan {
+  assertPlanHolds(input)
+  return {
+    ...input,
+    totalCpu: input.batches.reduce((sum, batch) => sum + batch.cpu, 0),
+    totalMemoryMb: input.batches.reduce((sum, batch) => sum + batch.memoryMb, 0),
+  }
+}
+
+/**
  * Raise when a partitioning does not hold.
  * @param input - the batches, the reserve, and the detected host.
  * @returns nothing; an over-allocated partitioning throws instead.

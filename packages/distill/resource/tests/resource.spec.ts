@@ -4,6 +4,7 @@ import {
   AdmissionRefusedError,
   ResourceAllocationError,
   assertPlanHolds,
+  resolvePlan,
   batchesOf,
   createTaskAdmissionGate,
   detectHostResources,
@@ -231,6 +232,30 @@ describe('createTaskAdmissionGate', () => {
     ...options.freeMemoryMb === undefined ? {} : { freeMemoryMb: () => options.freeMemoryMb as number },
   })
 
+  it('resolves a fitting plan into the totals the gate reads', () => {
+    const resolved = resolvePlan({
+      host: host(8, 8192),
+      batches: [{ cpu: 2, memoryMb: 2048 }, { cpu: 3, memoryMb: 3072 }],
+      reservedCpu: 1,
+      reservedMemoryMb: 1024,
+      maxConcurrentTasks: 2,
+    })
+    // The caller states the batches; only the resolver knows their sums, which is
+    // why the admission gate cannot be built from the request alone.
+    expect(resolved.totalCpu).toBe(5)
+    expect(resolved.totalMemoryMb).toBe(5120)
+    expect(resolved.batches).toHaveLength(2)
+  })
+
+  it('refuses to resolve a plan the host cannot hold', () => {
+    expect(() => resolvePlan({
+      host: host(8, 8192),
+      batches: [{ cpu: 16, memoryMb: 4096 }],
+      reservedCpu: 1,
+      reservedMemoryMb: 1024,
+      maxConcurrentTasks: 2,
+    })).toThrow(ResourceAllocationError)
+  })
   it('admits up to the plan concurrency and releases on settle', async () => {
     const gate = gateWith()
     const release1 = await gate.acquire({ batchIndex: 0 })

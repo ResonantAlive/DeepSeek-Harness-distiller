@@ -29,22 +29,27 @@ A plan that over-allocates is rejected with the arithmetic that failed, at start
 
 ```ts
 import {
-  assertPlanHolds,
   createTaskAdmissionGate,
   detectHostResources,
+  resolvePlan,
 } from '@deepseek-ai/dsh-distill-resource'
 
 // What the host actually allows. In a container this reads the cgroup limits,
 // which are tighter than what `os.totalmem()` reports for the physical machine.
 const host = detectHostResources()
 
-assertPlanHolds({
+// Two batches of 16 CPU and 30 GiB leave room for the reserve on a host that
+// holds it. resolvePlan refuses one that does not, and returns the plan with
+// the totals the gate below reads.
+const plan = resolvePlan({
   host,
   batches: [{ cpu: 16, memoryMb: 30_720 }, { cpu: 16, memoryMb: 30_720 }],
   reservedCpu: 1,
   reservedMemoryMb: 2048,
   maxConcurrentTasks: 8,
 })
+
+declare function runOneTask(): Promise<void>
 
 const gate = createTaskAdmissionGate({ plan, perTaskMemoryMb: 2048 })
 const release = await gate.acquire({ batchIndex: 0 })
@@ -86,10 +91,19 @@ A v1 quota of `-1` and a v2 quota of `max` both mean "no limit", and the v1 memo
 `createTaskAdmissionGate` admits at most `maxConcurrentTasks` tasks, at most each batch's own `maxConcurrentTasks`, and never a claim whose memory would leave less than `reservedMemoryMb` free. `acquire` resolves to a release function that must be called exactly once; a second call is a no-op.
 
 ```ts
-const release = await gate.acquire(
-  { batchIndex: 0, memoryMb: 4096 },
-  { signal: controller.signal, timeoutMs: 30_000 },
-)
+import type { AdmissionGate } from '@deepseek-ai/dsh-distill-resource'
+
+declare const gate: AdmissionGate
+declare const controller: AbortController
+
+async function claim(): Promise<() => void> {
+  // A claim that cannot be met before the deadline rejects rather than waiting
+  // forever, and the caller's signal cancels a wait that is already running.
+  return gate.acquire(
+    { batchIndex: 0, memoryMb: 4096 },
+    { signal: controller.signal, timeoutMs: 30_000 },
+  )
+}
 ```
 
 It rejects with `AdmissionRefusedError` when the batch index is not declared, when a claim would consume the reserve, when the caller's signal aborts, or when no place opens before the deadline.

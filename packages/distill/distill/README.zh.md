@@ -29,6 +29,10 @@ kind: "package-reference"
 
 ```ts
 import { DatasetWriter, loadTasks, runTask } from '@deepseek-ai/dsh-distill'
+import type { AgentRunner } from '@deepseek-ai/dsh-distill'
+
+// The caller supplies the agent side; this package never reaches a provider itself.
+declare const agent: AgentRunner
 
 const { root, defaults, tasks } = await loadTasks('/corpus/tasks/manifest.yml')
 const dataset = new DatasetWriter({ root: '/out/dataset' })
