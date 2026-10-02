@@ -4,7 +4,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { DatasetWriter } from '../src/dataset.ts'
-import { discardAttempt, attemptLimits, budgetBreach, endAttempt, promptFor, readEvents, repeatedAction, runTask, totalTokens } from '../src/runner.ts'
+import { snapshotContents, unifiedDiff } from '../src/evaluator.ts'
+import { diffsFor, discardAttempt, attemptLimits, budgetBreach, endAttempt, promptFor, readEvents, repeatedAction, runTask, totalTokens } from '../src/runner.ts'
 import type { AgentRunner, AttemptContext } from '../src/runner.ts'
 import { buildTrajectory, configHashOf, textOf } from '../src/trajectory.ts'
 import { parseRunnerArgs, resourcePlanFor } from '../../../../apps/distill/src/bin.ts'
@@ -333,6 +334,102 @@ describe('buildTrajectory details', () => {
     expect(trajectory.artifacts.files_created).toEqual(['out.txt', 'stray.txt'])
   })
 
+  it('reports nothing when the bytes changed but the text did not', async () => {
+    const root = await scratch()
+    await writeFile(join(root, 'before.bin'), Buffer.from([0x41, 0xff]))
+    await writeFile(join(root, 'after.bin'), Buffer.from([0x41, 0xfe]))
+    const before = await snapshotContents(root)
+    // Both invalid sequences decode to the same replacement character, so the
+    // bytes differ while the text a line diff describes does not.
+    expect(before['before.bin']).toBe(before['after.bin'])
+    expect(unifiedDiff(before['before.bin'], before['after.bin'])).toBe('')
+    // Reached through the runner's own decision, which reports nothing here.
+    expect(diffsFor([{ path: 'before.bin', change: 'modified' }], before, before)).toEqual([])
+  })
+  it('omits a diff for a file whose content was not kept', async () => {
+    const root = await scratch()
+    const dataset = new DatasetWriter({ root: join(root, 'dataset') })
+    const result = await runTask({
+      task: task(),
+      defaults: { max_attempts: 1 },
+      templatesRoot: await templatesAt(root),
+      evaluatorRoot: join(root, 'evaluator'),
+      runsRoot: join(root, 'runs'),
+      dataset,
+      agent: teacher(async (context) => {
+        // A null byte makes this binary, so the fingerprint changes and no text
+        // was kept on either side.
+        await writeFile(join(context.workspace, 'blob.bin'), Buffer.from([1, 0, 2]))
+        await succeed(context)
+        return { status: 'SUCCESS', reason: 'done' }
+      }),
+    })
+    const diffs = result.attempts[0]?.artifacts.diffs ?? []
+    // The change is still reported; only the inside of the file is absent, and
+    // it is absent rather than claimed to be unchanged.
+    expect(result.attempts[0]?.artifacts.files_created).toContain('blob.bin')
+    expect(diffs.some(entry => entry.path === 'blob.bin')).toBe(false)
+  })
+  it('records what an attempt changed inside the files it touched', async () => {
+    const root = await scratch()
+    const dataset = new DatasetWriter({ root: join(root, 'dataset') })
+    const result = await runTask({
+      task: task(),
+      defaults: { max_attempts: 1 },
+      templatesRoot: await templatesAt(root),
+      evaluatorRoot: join(root, 'evaluator'),
+      runsRoot: join(root, 'runs'),
+      dataset,
+      agent: teacher(async (context) => {
+        // The template supplies README.md, so this is a modification with a
+        // before and an after to compare.
+        await writeFile(join(context.workspace, 'README.md'), 'changed\n', 'utf8')
+        await succeed(context)
+        return { status: 'SUCCESS', reason: 'done' }
+      }),
+    })
+    const diffs = result.attempts[0]?.artifacts.diffs ?? []
+    const readme = diffs.find(entry => entry.path === 'README.md')
+    expect(readme?.change).toBe('modified')
+    expect(readme?.diff).toContain('-template')
+    expect(readme?.diff).toContain('+changed')
+    // A file the attempt created has no earlier text, so its whole content is
+    // the diff rather than a comparison against nothing.
+    const marker = diffs.find(entry => entry.path === 'marker.txt')
+    expect(marker?.change).toBe('created')
+    expect(marker?.diff).toContain('+done')
+  })
+  it('renders the change inside a file, not only that it changed', () => {
+    // One line changes in the middle, so the shared head and tail are trimmed
+    // and only the edit is reported.
+    const edited = unifiedDiff('one\ntwo\nthree\n', 'one\nTWO\nthree\n')
+    // The hunk names where the edit is, and the surrounding lines are kept as
+    // context so a reader can place it.
+    expect(edited.split('\n')[0]).toBe('@@ -2,1 +2,1 @@')
+    expect(edited).toContain('-two')
+    expect(edited).toContain('+TWO')
+    expect(edited).toContain(' one')
+    // Creating and removing a file are the two ends of the same scale.
+    expect(unifiedDiff(undefined, 'fresh\n')).toContain('+fresh')
+    expect(unifiedDiff('gone\n', undefined)).toContain('-gone')
+    // Text that did not change has nothing to report.
+    expect(unifiedDiff('same\n', 'same\n')).toBe('')
+  })
+
+  it('cuts a diff short rather than letting one file fill the trajectory', () => {
+    const rendered = unifiedDiff('a\n', 'b\nc\nd\ne\n', { limit: 20 })
+    expect(rendered).toContain('… diff truncated at 20 characters')
+    expect(rendered.length).toBeLessThan(90)
+  })
+
+  it('keeps the text of a tree and skips what a line diff cannot describe', async () => {
+    const root = await scratch()
+    await writeFile(join(root, 'kept.txt'), 'text\n', 'utf8')
+    await writeFile(join(root, 'big.txt'), 'x'.repeat(5000), 'utf8')
+    await writeFile(join(root, 'blob.bin'), Buffer.from([1, 0, 2]))
+    // The size bound drops the large file and the null byte drops the binary one.
+    expect(Object.keys(await snapshotContents(root, { maxBytes: 1000 }))).toEqual(['kept.txt'])
+  })
   it('digests the same call settings to the same hash whatever their order', () => {
     expect(configHashOf({ provider: 'p', model: 'm' })).toBe(configHashOf({ model: 'm', provider: 'p' }))
     expect(configHashOf({ provider: 'p', model: 'm' })).not.toBe(configHashOf({ provider: 'p', model: 'x' }))

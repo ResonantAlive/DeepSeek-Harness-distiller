@@ -154,6 +154,98 @@ export async function fingerprintDirectory(root: string): Promise<Record<string,
 }
 
 /**
+ * The largest file a content snapshot keeps.
+ *
+ * A trajectory is a training artifact, not a backup: beyond this the snapshot
+ * costs more than the change it describes, and the fingerprints still prove the
+ * file changed.
+ */
+export const DEFAULT_CONTENT_LIMIT_BYTES = 256 * 1024
+
+/** The largest diff kept for one file, in characters. */
+export const DEFAULT_DIFF_LIMIT_CHARS = 16 * 1024
+
+/** How many unchanged lines a diff keeps around each change. */
+export const DEFAULT_DIFF_CONTEXT_LINES = 3
+
+/**
+ * Read the text of every file a tree holds, within a size bound.
+ *
+ * A binary file is skipped rather than decoded: a line diff of bytes that are
+ * not lines would be noise that looks like data.
+ *
+ * @param root - the directory to read.
+ * @param options - the size bound; defaults to {@link DEFAULT_CONTENT_LIMIT_BYTES}.
+ * @returns each kept file's text, keyed by its POSIX-relative path.
+ */
+export async function snapshotContents(
+  root: string,
+  options: { maxBytes?: number } = {},
+): Promise<Record<string, string>> {
+  const limit = options.maxBytes ?? DEFAULT_CONTENT_LIMIT_BYTES
+  const contents: Record<string, string> = {}
+  for (const file of await fileList(root)) {
+    const bytes = await readFile(join(root, file))
+    if (bytes.byteLength > limit) continue
+    const text = bytes.toString('utf8')
+    if (text.includes('\u0000')) continue
+    contents[file] = text
+  }
+  return contents
+}
+
+/**
+ * Render the difference between two texts as a unified diff.
+ *
+ * The shared head and tail are trimmed first, which is what makes an edit to a
+ * large file a small diff. What remains is one hunk: reporting a whole file
+ * replaced is truthful for a rewrite and cheap to compute, while a full
+ * line-level diff would cost more than the trajectory it describes.
+ *
+ * @param before - the earlier text, or `undefined` when the file did not exist.
+ * @param after - the later text, or `undefined` when the file was removed.
+ * @param options - the context lines and the character bound.
+ * @returns the diff, or an empty string when the two texts are the same.
+ */
+export function unifiedDiff(
+  before: string | undefined,
+  after: string | undefined,
+  options: { context?: number; limit?: number } = {},
+): string {
+  const context = options.context ?? DEFAULT_DIFF_CONTEXT_LINES
+  const limit = options.limit ?? DEFAULT_DIFF_LIMIT_CHARS
+  const earlier = before ?? ''
+  const later = after ?? ''
+  if (earlier === later) return ''
+
+  const beforeLines = earlier.split('\n')
+  const afterLines = later.split('\n')
+  let shared = 0
+  while (shared < beforeLines.length && shared < afterLines.length && beforeLines[shared] === afterLines[shared]) shared++
+  let trailing = 0
+  while (
+    trailing < beforeLines.length - shared
+    && trailing < afterLines.length - shared
+    && beforeLines[beforeLines.length - 1 - trailing] === afterLines[afterLines.length - 1 - trailing]
+  ) trailing++
+
+  const removed = beforeLines.slice(shared, beforeLines.length - trailing)
+  const added = afterLines.slice(shared, afterLines.length - trailing)
+  const leading = beforeLines.slice(Math.max(0, shared - context), shared)
+  const following = beforeLines.slice(beforeLines.length - trailing, beforeLines.length - trailing + context)
+  const rendered = [
+    `@@ -${String(shared + 1)},${String(removed.length)} +${String(shared + 1)},${String(added.length)} @@`,
+    ...leading.map(line => ` ${line}`),
+    ...removed.map(line => `-${line}`),
+    ...added.map(line => `+${line}`),
+    ...following.map(line => ` ${line}`),
+  ].join('\n')
+  return rendered.length <= limit
+    ? rendered
+    : `${rendered.slice(0, limit)}\n… diff truncated at ${String(limit)} characters`
+}
+
+/**
  * Compare two fingerprints of the same tree.
  * @param before - the fingerprint taken earlier.
  * @param after - the fingerprint taken later.

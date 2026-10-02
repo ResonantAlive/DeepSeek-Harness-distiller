@@ -88,6 +88,16 @@ export interface FileChange {
   readonly tool_call_id?: string
 }
 
+/** What changed inside one file over an attempt. */
+export interface FileDiff {
+  /** POSIX-relative path inside the workspace. */
+  readonly path: string
+  /** What happened to the path. */
+  readonly change: 'created' | 'modified' | 'deleted'
+  /** The unified diff, cut short when it exceeded its bound. */
+  readonly diff: string
+}
+
 /** One step of an attempt. */
 export interface TrajectoryStep {
   /** Zero-based position within the attempt. */
@@ -170,6 +180,14 @@ export interface AttemptTrajectory {
     readonly files_created: readonly string[]
     readonly files_modified: readonly string[]
     readonly files_deleted: readonly string[]
+    /**
+     * What changed inside each file, not only that it changed.
+     *
+     * A fingerprint proves a file differs without saying how, which is the part
+     * a student model learns from. Files whose content was not kept, because they
+     * were too large or not text, are absent rather than reported as unchanged.
+     */
+    readonly diffs: readonly FileDiff[]
   }
   /** Integrity problems detected after the attempt ran. */
   readonly integrity_flags: readonly IntegrityFlag[]
@@ -317,6 +335,7 @@ export function buildTrajectory(
     evaluation: unknown
     fileCapture: { git: boolean; coverage: string }
     fileChanges?: readonly FileChange[]
+    fileDiffs?: readonly FileDiff[]
   },
 ): AttemptTrajectory {
   const steps: TrajectoryStep[] = []
@@ -477,6 +496,7 @@ export function buildTrajectory(
       files_created: (options.fileChanges ?? []).filter(change => change.change === 'created').map(change => change.path).sort(),
       files_modified: (options.fileChanges ?? []).filter(change => change.change === 'modified').map(change => change.path).sort(),
       files_deleted: (options.fileChanges ?? []).filter(change => change.change === 'deleted').map(change => change.path).sort(),
+      diffs: options.fileDiffs ?? [],
     },
     integrity_flags: options.integrityFlags,
     file_capture: options.fileCapture,

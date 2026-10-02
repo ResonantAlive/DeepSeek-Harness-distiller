@@ -18,9 +18,10 @@ import { join } from 'node:path'
 import { createRecorder } from '@deepseek-ai/dsh-distill-trajectory-events'
 import type { TrajectoryRecorder } from '@deepseek-ai/dsh-distill-trajectory-events'
 import type { RawEvent } from '@deepseek-ai/dsh-distill-trajectory-events/writer'
-import { evaluateTask, fingerprintDirectory, integrityFlags, stageAssets } from './evaluator.ts'
+import { evaluateTask, fingerprintDirectory, integrityFlags, snapshotContents, stageAssets, unifiedDiff } from './evaluator.ts'
 import type { EvaluationResult } from './evaluator.ts'
 import { buildTrajectory } from './trajectory.ts'
+import type { FileDiff } from './trajectory.ts'
 import type { AttemptTrajectory, FileChange } from './trajectory.ts'
 import { prepareWorkspace } from './workspace.ts'
 import { bucketFor, DatasetWriter } from './dataset.ts'
@@ -179,6 +180,35 @@ export function endAttempt(
     throw new Error('a task document needs at least one attempt, but none was recorded')
   }
   return attempt
+}
+
+/**
+ * The inside of every file an attempt changed.
+ *
+ * A path whose text was not kept on either side is left out rather than
+ * described as unchanged, and so is one whose bytes changed while its decoded
+ * text did not: a line diff describes text, and there is nothing to report about
+ * text that reads the same.
+ *
+ * @param changes - the paths that changed, as the fingerprints report them.
+ * @param before - the text kept before the attempt, by path.
+ * @param after - the text kept after it, by path.
+ * @returns one entry per changed path that has a difference to show.
+ */
+export function diffsFor(
+  changes: readonly FileChange[],
+  before: Readonly<Record<string, string>>,
+  after: Readonly<Record<string, string>>,
+): FileDiff[] {
+  const diffs: FileDiff[] = []
+  for (const change of changes) {
+    const earlier = before[change.path]
+    const later = after[change.path]
+    if (earlier === undefined && later === undefined) continue
+    const diff = unifiedDiff(earlier, later)
+    if (diff.length > 0) diffs.push({ path: change.path, change: change.change, diff })
+  }
+  return diffs
 }
 
 /**
@@ -385,6 +415,7 @@ export async function runTask(options: RunTaskOptions): Promise<TaskResult> {
     // afterwards: the evaluator's own assets and the scaffold it was given.
     const assetsBefore = await fingerprintDirectory(evaluatorDir)
     const scaffoldBefore = await fingerprintDirectory(workspace)
+    const contentsBefore = await snapshotContents(workspace)
 
     const recorder = createRecorder({
       root: attemptRoot,
@@ -467,6 +498,12 @@ export async function runTask(options: RunTaskOptions): Promise<TaskResult> {
     for (const path of Object.keys(scaffoldBefore)) {
       if (scaffoldAfter[path] === undefined) changes.push({ path, change: 'deleted' })
     }
+    // A fingerprint says a file differs without saying how. The content read
+    // before the attempt is what turns that into something a student model can
+    // learn from, and a file that was not kept is left out rather than described
+    // as unchanged.
+    const contentsAfter = await snapshotContents(workspace)
+    const diffs = diffsFor(changes, contentsBefore, contentsAfter)
 
     let evaluation: EvaluationResult | undefined
     if (outcome.status === 'ERROR' && outcome.errorClass === 'infrastructure') {
@@ -513,6 +550,7 @@ export async function runTask(options: RunTaskOptions): Promise<TaskResult> {
       evaluation: evaluation ?? null,
       fileCapture: { git: false, coverage: 'file-tools-only' },
       fileChanges: changes,
+      fileDiffs: diffs,
     }))
 
     if (attemptStatus === 'SUCCESS' && flags.length === 0) {
